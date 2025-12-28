@@ -1,18 +1,30 @@
-import type { Metadata } from "next";
+'use client';
 
-export const metadata: Metadata = {
-  title: "App",
-  description: "Frontend application",
-};
+import './globals.css';
+import { Auth0Provider } from '@auth0/auth0-react';
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const domain = process.env.NEXT_PUBLIC_AUTH0_DOMAIN || '';
+  const clientId = process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID || '';
+  const redirectUri = typeof window !== 'undefined' ? window.location.origin : '';
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Auth0Provider
+          domain={domain}
+          clientId={clientId}
+          authorizationParams={{
+            redirect_uri: redirectUri,
+          }}
+        >
+          {children}
+        </Auth0Provider>
+      </body>
     </html>
   );
 }
