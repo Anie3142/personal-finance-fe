@@ -34,3 +34,4 @@ npx wrangler pages deploy out --project-name=YOUR_PROJECT
 
 Set in Cloudflare Pages dashboard:
 - `NEXT_PUBLIC_API_URL` = `https://api.namelesscompany.cc`
+# OpenNext deployment
