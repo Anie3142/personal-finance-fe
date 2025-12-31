@@ -1,12 +1,10 @@
-'use client';
-
+import type { Metadata } from 'next';
+import { Providers } from '@/components/providers';
 import './globals.css';
-import { Auth0Provider } from '@auth0/auth0-react';
 
-// Auth0 configuration (these are public values, safe to expose)
-const AUTH0_CONFIG = {
-  domain: 'dev-54nxe440ro81hlb6.us.auth0.com',
-  clientId: 'SM3sFfXc1ntYVIeWY1g16pVnuSsYUI7k',
+export const metadata: Metadata = {
+  title: 'NairaTrack - Personal Finance Management',
+  description: 'Track your finances, budgets, and goals',
 };
 
 export default function RootLayout({
@@ -14,21 +12,10 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Use window.location.origin for redirect to work on any domain (localhost, preview, production)
-  const redirectUri = typeof window !== 'undefined' ? window.location.origin : '';
-
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <Auth0Provider
-          domain={AUTH0_CONFIG.domain}
-          clientId={AUTH0_CONFIG.clientId}
-          authorizationParams={{
-            redirect_uri: redirectUri,
-          }}
-        >
-          {children}
-        </Auth0Provider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
