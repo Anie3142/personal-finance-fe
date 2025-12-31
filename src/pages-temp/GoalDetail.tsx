@@ -98,8 +98,8 @@ export default function GoalDetail() {
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                   }}
-                  formatter={(value: number | null, name: string) => [
-                    value ? formatCurrency(value) : 'N/A',
+                  formatter={(value, name) => [
+                    typeof value === 'number' ? formatCurrency(value) : 'N/A',
                     name === 'actual' ? 'Actual' : 'Projected'
                   ]}
                 />
