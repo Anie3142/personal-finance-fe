@@ -22,12 +22,54 @@ pipeline {
             }
         }
 
+        stage('Setup Node.js') {
+            steps {
+                script {
+                    echo "🔧 Setting up Node.js environment..."
+                    
+                    // Install Node.js 20 using nvm if not available
+                    sh '''
+                        # Check if node is available
+                        if ! command -v node &> /dev/null || [ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 18 ]; then
+                            echo "Installing Node.js 20 via nvm..."
+                            export NVM_DIR="$HOME/.nvm"
+                            
+                            # Install nvm if not present
+                            if [ ! -d "$NVM_DIR" ]; then
+                                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                            fi
+                            
+                            # Load nvm
+                            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                            
+                            # Install and use Node.js 20
+                            nvm install 20
+                            nvm use 20
+                        fi
+                        
+                        node --version
+                        npm --version
+                    '''
+                    echo "✅ Node.js environment ready"
+                }
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 script {
                     echo "📦 Installing Node.js dependencies..."
+                    
+                    // Source nvm and run npm ci
                     sh '''
-                        docker run --rm -v "$(pwd)":/app -w /app node:20 npm ci
+                        export NVM_DIR="$HOME/.nvm"
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        
+                        # Debug: list files to verify package-lock.json exists
+                        echo "Files in workspace:"
+                        ls -la package*.json
+                        
+                        npm ci
                     '''
                     echo "✅ Dependencies installed"
                 }
@@ -39,7 +81,10 @@ pipeline {
                 script {
                     echo "🔍 Running lint and type checks..."
                     sh '''
-                        docker run --rm -v "$(pwd)":/app -w /app node:20 npm run lint || echo "Lint warnings found, continuing..."
+                        export NVM_DIR="$HOME/.nvm"
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        
+                        npm run lint || echo "Lint warnings found, continuing..."
                     '''
                     echo "✅ Code quality checks complete"
                 }
@@ -57,9 +102,11 @@ pipeline {
                     
                     // Build using the OpenNext Cloudflare adapter
                     sh '''
-                        docker run --rm -v "$(pwd)":/app -w /app \
-                            -e NODE_OPTIONS="--max-old-space-size=4096" \
-                            node:20 npx @opennextjs/cloudflare build
+                        export NVM_DIR="$HOME/.nvm"
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        export NODE_OPTIONS="--max-old-space-size=4096"
+                        
+                        npx @opennextjs/cloudflare build
                     '''
                     
                     echo "✅ Build complete! Output in .open-next/"
@@ -77,10 +124,12 @@ pipeline {
                     
                     // Deploy using wrangler
                     sh """
-                        docker run --rm -v "\$(pwd)":/app -w /app \
-                            -e CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}" \
-                            -e CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
-                            node:20 npx wrangler deploy --config wrangler.toml
+                        export NVM_DIR="\$HOME/.nvm"
+                        [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+                        
+                        CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}" \
+                        CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
+                        npx wrangler deploy --config wrangler.toml
                     """
                     
                     echo "✅ Deployed to Cloudflare Workers!"
@@ -141,7 +190,6 @@ pipeline {
         cleanup {
             // Clean up node_modules and build artifacts to save space
             sh 'rm -rf node_modules .open-next .next || true'
-            sh 'docker system prune -f || true'
         }
     }
 }
