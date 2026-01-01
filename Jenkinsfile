@@ -113,25 +113,31 @@ pipeline {
             }
         }
 
-        stage('Deploy to Cloudflare Workers') {
+        stage('Deploy to Cloudflare Pages') {
             when {
                 branch 'main'
             }
             steps {
                 script {
-                    echo "🚀 Deploying to Cloudflare Workers..."
+                    echo "🚀 Deploying to Cloudflare Pages..."
                     
-                    // Deploy using wrangler
+                    // Deploy to Pages using wrangler pages deploy
+                    // The .open-next/assets directory contains static files
+                    // and worker.js is the edge function
                     sh """
                         export NVM_DIR="\$HOME/.nvm"
                         [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
                         
                         CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}" \
                         CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
-                        npx wrangler deploy --config wrangler.toml
+                        npx wrangler pages deploy .open-next/assets \
+                            --project-name=personal-finance-fe \
+                            --branch=main \
+                            --commit-hash=\$(git rev-parse HEAD) \
+                            --commit-message="Jenkins deploy \$(git rev-parse --short HEAD)"
                     """
                     
-                    echo "✅ Deployed to Cloudflare Workers!"
+                    echo "✅ Deployed to Cloudflare Pages!"
                 }
             }
         }
