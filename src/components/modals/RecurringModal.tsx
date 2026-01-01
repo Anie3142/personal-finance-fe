@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Repeat, Bell, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/api';
 
 interface RecurringTransaction {
   id?: string;
@@ -32,21 +34,6 @@ interface RecurringModalProps {
 
 const icons = ['🎬', '📺', '🎵', '🏠', '💡', '📱', '🌐', '💰', '💻', '🚗', '🏋️', '📦'];
 
-const categories = [
-  { id: 'entertainment', name: 'Entertainment' },
-  { id: 'bills', name: 'Bills & Utilities' },
-  { id: 'subscriptions', name: 'Subscriptions' },
-  { id: 'rent', name: 'Rent' },
-  { id: 'salary', name: 'Salary' },
-  { id: 'freelance', name: 'Freelance' },
-];
-
-const accounts = [
-  { id: 'gtbank', name: 'GTBank Savings' },
-  { id: 'access', name: 'Access Current' },
-  { id: 'zenith', name: 'Zenith Salary' },
-];
-
 export function RecurringModal({ recurring, open, onOpenChange, onSave }: RecurringModalProps) {
   const [name, setName] = useState(recurring?.name || '');
   const [icon, setIcon] = useState(recurring?.icon || '📦');
@@ -60,6 +47,38 @@ export function RecurringModal({ recurring, open, onOpenChange, onSave }: Recurr
   const [reminderDays, setReminderDays] = useState(recurring?.reminderDays?.toString() || '3');
   const [type, setType] = useState<'bill' | 'income'>(recurring?.type || 'bill');
 
+  // Fetch real categories from API
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.getCategories(),
+    enabled: open,
+  });
+
+  // Fetch real accounts from API
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => api.getAccounts(),
+    enabled: open,
+  });
+
+  const categories = categoriesData?.categories || [];
+  const accounts = accountsData?.accounts || [];
+
+  // Reset form when modal opens/closes or recurring changes
+  useEffect(() => {
+    if (open) {
+      setName(recurring?.name || '');
+      setIcon(recurring?.icon || '📦');
+      setAmount(recurring?.amount?.toString() || '');
+      setFrequency(recurring?.frequency || 'Monthly');
+      setNextDate(recurring?.nextDate ? new Date(recurring.nextDate) : undefined);
+      setCategory(recurring?.category || '');
+      setAccount(recurring?.account || '');
+      setReminderDays(recurring?.reminderDays?.toString() || '3');
+      setType(recurring?.type || 'bill');
+    }
+  }, [open, recurring]);
+
   const handleSave = () => {
     if (!name || !amount || !nextDate) return;
 
@@ -70,8 +89,8 @@ export function RecurringModal({ recurring, open, onOpenChange, onSave }: Recurr
       amount: parseFloat(amount),
       frequency,
       nextDate: nextDate.toISOString().split('T')[0],
-      category,
-      account,
+      category,  // This is now the actual UUID from the API
+      account,   // This is now the actual UUID from the API
       reminderDays: parseInt(reminderDays) || 3,
       type,
     };
@@ -220,7 +239,10 @@ export function RecurringModal({ recurring, open, onOpenChange, onSave }: Recurr
                 <SelectContent>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
+                      <span className="flex items-center gap-2">
+                        <span>{cat.icon}</span>
+                        <span>{cat.name}</span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

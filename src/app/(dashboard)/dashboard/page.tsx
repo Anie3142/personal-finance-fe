@@ -1,8 +1,7 @@
-
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -16,13 +15,15 @@ import {
   Lightbulb,
   X,
   ArrowRightLeft,
-  Building2
+  Building2,
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,60 +36,15 @@ import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/common';
 import { MonoConnectModal } from '@/components/modals';
 import { toast } from '@/hooks/use-toast';
-
-// Sample Data
-const netWorthData = Array.from({ length: 30 }, (_, i) => ({
-  value: 2200000 + Math.random() * 300000 + i * 8000,
-}));
-
-const accounts = [
-  { id: '1', name: 'GTBank Savings', bank: 'GTBank', balance: 850000, lastSync: new Date(Date.now() - 120000), initials: 'GT', color: 'bg-orange-500' },
-  { id: '2', name: 'Access Current', bank: 'Access Bank', balance: 1250000, lastSync: new Date(Date.now() - 3600000), initials: 'AC', color: 'bg-blue-500' },
-  { id: '3', name: 'Zenith Savings', bank: 'Zenith Bank', balance: 350000, lastSync: new Date(Date.now() - 7200000), initials: 'ZB', color: 'bg-red-500' },
-];
-
-const categorySpending = [
-  { name: 'Food & Dining', value: 65000, color: 'hsl(var(--chart-1))' },
-  { name: 'Transportation', value: 42000, color: 'hsl(var(--chart-2))' },
-  { name: 'Shopping', value: 38000, color: 'hsl(var(--chart-3))' },
-  { name: 'Bills & Utilities', value: 28000, color: 'hsl(var(--chart-4))' },
-  { name: 'Entertainment', value: 12000, color: 'hsl(var(--chart-5))' },
-];
-
-const budgets = [
-  { id: '1', category: 'Food & Dining', emoji: '🍕', spent: 65000, limit: 80000 },
-  { id: '2', category: 'Transportation', emoji: '🚗', spent: 42000, limit: 50000 },
-  { id: '3', category: 'Shopping', emoji: '🛍️', spent: 38000, limit: 35000 },
-  { id: '4', category: 'Bills', emoji: '💡', spent: 28000, limit: 45000 },
-  { id: '5', category: 'Entertainment', emoji: '🎬', spent: 12000, limit: 20000 },
-  { id: '6', category: 'Healthcare', emoji: '🏥', spent: 5000, limit: 15000 },
-];
-
-const cashFlowData = [
-  { month: 'Aug', income: 580000, expenses: 320000 },
-  { month: 'Sep', income: 620000, expenses: 290000 },
-  { month: 'Oct', income: 650000, expenses: 380000 },
-  { month: 'Nov', income: 600000, expenses: 340000 },
-  { month: 'Dec', income: 750000, expenses: 420000 },
-  { month: 'Jan', income: 650000, expenses: 285000 },
-];
-
-const recentTransactions = [
-  { id: '1', merchant: 'Shoprite Lekki', category: 'Food & Dining', categoryColor: 'bg-orange-500', amount: -12500, type: 'debit', date: new Date() },
-  { id: '2', merchant: 'Uber Trip', category: 'Transportation', categoryColor: 'bg-blue-500', amount: -3500, type: 'debit', date: new Date() },
-  { id: '3', merchant: 'Salary Credit', category: 'Income', categoryColor: 'bg-emerald-500', amount: 650000, type: 'credit', date: new Date(Date.now() - 86400000) },
-  { id: '4', merchant: 'Netflix', category: 'Entertainment', categoryColor: 'bg-purple-500', amount: -4400, type: 'debit', date: new Date(Date.now() - 86400000) },
-  { id: '5', merchant: 'MTN Airtime', category: 'Bills', categoryColor: 'bg-yellow-500', amount: -5000, type: 'debit', date: new Date(Date.now() - 86400000) },
-  { id: '6', merchant: 'DSTV Premium', category: 'Entertainment', categoryColor: 'bg-purple-500', amount: -24500, type: 'debit', date: new Date(Date.now() - 172800000) },
-  { id: '7', merchant: 'Bolt Ride', category: 'Transportation', categoryColor: 'bg-blue-500', amount: -2800, type: 'debit', date: new Date(Date.now() - 172800000) },
-];
-
-const insights = [
-  { id: '1', icon: '📈', text: 'You spent 23% less on Food this month. Great job!', type: 'success' },
-  { id: '2', icon: '⚠️', text: 'Shopping budget is 108% used with 10 days left.', type: 'warning' },
-  { id: '3', icon: '🔔', text: 'Netflix subscription due in 5 days: ₦4,400', type: 'info' },
-  { id: '4', icon: '🎯', text: "You're on track to save ₦165,000 this month!", type: 'success' },
-];
+import {
+  useAccounts,
+  useTransactions,
+  useBudgets,
+  useInsights,
+  useNetWorth,
+  useSyncConnection,
+} from '@/hooks/useApi';
+import type { Transaction, Budget, Insight } from '@/types/api';
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -105,41 +61,203 @@ function getBudgetStatus(spent: number, limit: number) {
   return { color: 'bg-success', status: 'On Track' };
 }
 
+// Get insight icon based on severity
+function getInsightIcon(severity: string) {
+  switch (severity) {
+    case 'warning': return '⚠️';
+    case 'success': return '✅';
+    default: return '💡';
+  }
+}
+
+// Loading skeleton components
+function DashboardSkeleton() {
+  return (
+    <div className="container py-6 pb-24 lg:pb-6 space-y-6">
+      <div className="mb-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-64 mt-2" />
+      </div>
+      
+      {/* Net Worth Card Skeleton */}
+      <Card>
+        <CardContent className="p-6">
+          <Skeleton className="h-4 w-24 mb-2" />
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-6 w-32 mt-2" />
+        </CardContent>
+      </Card>
+
+      {/* Accounts Skeleton */}
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="min-w-[200px] shrink-0">
+            <CardContent className="p-4">
+              <Skeleton className="h-10 w-10 rounded-lg mb-3" />
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-6 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Grid Skeleton */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [dismissedInsights, setDismissedInsights] = useState<string[]>([]);
   const [monoModalOpen, setMonoModalOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
-  // Fix hydration error: use static initial greeting, update on client
   const [greeting, setGreeting] = useState('Hello');
   
   useEffect(() => {
     setGreeting(getGreeting());
   }, []);
+
+  // Fetch data from API
+  const { data: accountsData, isLoading: accountsLoading, error: accountsError } = useAccounts();
+  const { data: transactionsData, isLoading: transactionsLoading } = useTransactions({ limit: 10 });
+  const { data: budgetsData, isLoading: budgetsLoading } = useBudgets();
+  const { data: insightsData } = useInsights();
+  const { data: netWorthData } = useNetWorth('6months');
+  const syncConnection = useSyncConnection();
+
+  // Computed values
+  const accounts = accountsData?.accounts || [];
+  const transactions: Transaction[] = transactionsData?.transactions || [];
+  const budgets: Budget[] = budgetsData?.budgets || [];
+  const insights: Insight[] = insightsData?.insights || [];
   
-  // For demo, toggle this to see empty state
-  const showEmptyState = false;
-  const connectedAccounts = showEmptyState ? [] : accounts;
-  
-  const totalSpent = 185000;
-  const totalBudget = 300000;
-  const daysRemaining = 10;
+  // Calculate totals
+  const totalBalance = useMemo(() => 
+    accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0), 
+    [accounts]
+  );
+
+  const totalBudgetSpent = useMemo(() =>
+    budgets.reduce((sum, b) => sum + (b.spent || 0), 0),
+    [budgets]
+  );
+
+  const totalBudgetLimit = useMemo(() =>
+    budgets.reduce((sum, b) => sum + (b.amount || 0), 0),
+    [budgets]
+  );
+
+  // Category spending breakdown from budgets
+  const categorySpending = useMemo(() => {
+    const colors = [
+      'hsl(var(--chart-1))',
+      'hsl(var(--chart-2))',
+      'hsl(var(--chart-3))',
+      'hsl(var(--chart-4))',
+      'hsl(var(--chart-5))',
+    ];
+    return budgets.slice(0, 5).map((b, i) => ({
+      name: b.category_name || 'Uncategorized',
+      value: b.spent || 0,
+      color: colors[i % colors.length],
+    }));
+  }, [budgets]);
+
+  // Net worth sparkline data
+  const netWorthSparkline = useMemo(() => {
+    if (netWorthData?.data_points && netWorthData.data_points.length > 0) {
+      return netWorthData.data_points.map(d => ({ value: d.net_worth }));
+    }
+    // Fallback to single point
+    return [{ value: totalBalance }];
+  }, [netWorthData, totalBalance]);
+
+  // Cash flow data (placeholder - would need separate API endpoint)
+  const cashFlowData = useMemo(() => {
+    const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
+    return months.map(month => ({
+      month,
+      income: 0,
+      expenses: 0,
+    }));
+  }, []);
+
+  const daysRemaining = useMemo(() => {
+    const now = new Date();
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return endOfMonth.getDate() - now.getDate();
+  }, []);
+
+  const visibleInsights = insights.filter(i => !dismissedInsights.includes(i.id));
 
   const dismissInsight = (id: string) => {
     setDismissedInsights(prev => [...prev, id]);
   };
 
-  const visibleInsights = insights.filter(i => !dismissedInsights.includes(i.id));
-
-  const handleSyncAll = () => {
+  const handleSyncAll = async () => {
     toast({
       title: 'Syncing all accounts',
       description: 'Your accounts will be synced in the background.',
     });
+    // Sync each connected account
+    for (const account of accounts) {
+      if (account.connection_id) {
+        try {
+          await syncConnection.mutateAsync(account.connection_id);
+        } catch (error) {
+          console.error('Error syncing account:', error);
+        }
+      }
+    }
   };
 
+  // Loading state
+  const isLoading = accountsLoading || transactionsLoading || budgetsLoading;
+  
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  // Error state
+  if (accountsError) {
+    return (
+      <div className="container py-6 pb-24 lg:pb-6">
+        <Card className="p-6">
+          <div className="flex items-center gap-3 text-destructive">
+            <AlertCircle className="h-6 w-6" />
+            <div>
+              <h3 className="font-semibold">Error loading dashboard</h3>
+              <p className="text-sm text-muted-foreground">
+                {accountsError instanceof Error ? accountsError.message : 'Failed to load data'}
+              </p>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   // Empty state when no accounts connected
-  if (connectedAccounts.length === 0) {
+  if (accounts.length === 0) {
     return (
       <div className="container py-6 pb-24 lg:pb-6">
         <div className="mb-6">
@@ -213,20 +331,25 @@ export default function DashboardPage() {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
-              <p className="text-4xl font-bold tracking-tight">₦2,450,000</p>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant="secondary" className="bg-success/20 text-success border-0">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  +₦125,000
-                </Badge>
-                <span className="text-xs text-muted-foreground">this month</span>
-              </div>
+              <p className="text-4xl font-bold tracking-tight">{formatCurrency(netWorthData?.current_net_worth || totalBalance)}</p>
+              {netWorthData?.change_percent !== undefined && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="secondary" className={cn(
+                    "border-0",
+                    netWorthData.change_percent >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                  )}>
+                    <TrendingUp className={cn("h-3 w-3 mr-1", netWorthData.change_percent < 0 && "rotate-180")} />
+                    {netWorthData.change_percent >= 0 ? '+' : ''}{netWorthData.change_percent.toFixed(1)}%
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">this month</span>
+                </div>
+              )}
             </div>
             <div className="w-full lg:w-48 h-12">
-              <SparklineChart data={netWorthData} />
+              {netWorthSparkline.length > 1 && <SparklineChart data={netWorthSparkline} />}
             </div>
           </div>
-          <Link href="/reports" className="inline-flex items-center text-sm text-primary mt-4 hover:underline">
+          <Link href="/reports/net-worth" className="inline-flex items-center text-sm text-primary mt-4 hover:underline">
             View Net Worth Details <ChevronRight className="h-4 w-4" />
           </Link>
         </CardContent>
@@ -246,31 +369,39 @@ export default function DashboardPage() {
               <Card key={account.id} className="min-w-[200px] shrink-0">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg text-white font-semibold text-sm', account.color)}>
-                      {account.initials}
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white font-semibold text-sm">
+                      {account.name?.substring(0, 2).toUpperCase() || 'AC'}
                     </div>
                     <div className="overflow-hidden">
                       <p className="font-medium truncate">{account.name}</p>
-                      <p className="text-xs text-muted-foreground">{account.bank}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{account.type}</p>
                     </div>
                   </div>
-                  <p className="text-xl font-bold">{formatCurrency(account.balance)}</p>
+                  <p className="text-xl font-bold">{formatCurrency(account.balance || 0)}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-muted-foreground">
-                      {formatRelativeDate(account.lastSync)}
+                      {account.last_synced_at ? formatRelativeDate(new Date(account.last_synced_at)) : 'Not synced'}
                     </span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6">
-                      <RefreshCw className="h-3 w-3" />
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-6 w-6"
+                      onClick={() => account.connection_id && syncConnection.mutate(account.connection_id)}
+                    >
+                      <RefreshCw className={cn("h-3 w-3", syncConnection.isPending && "animate-spin")} />
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
             <Card className="min-w-[200px] shrink-0 border-dashed flex items-center justify-center">
-              <Link href="/accounts" className="flex flex-col items-center gap-2 p-4 text-muted-foreground hover:text-foreground transition-colors">
+              <button 
+                onClick={() => setMonoModalOpen(true)}
+                className="flex flex-col items-center gap-2 p-4 text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Plus className="h-8 w-8" />
                 <span className="text-sm font-medium">Connect Bank</span>
-              </Link>
+              </button>
             </Card>
           </div>
           <ScrollBar orientation="horizontal" />
@@ -286,13 +417,20 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-6">
-              <DonutChart value={totalSpent} total={totalBudget} />
+              <DonutChart value={totalBudgetSpent} total={totalBudgetLimit || 1} />
               <div className="flex-1">
-                <p className="text-2xl font-bold">{formatCurrency(totalSpent)}</p>
-                <p className="text-sm text-muted-foreground">of {formatCurrency(totalBudget)} budgeted</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalBudgetSpent)}</p>
+                <p className="text-sm text-muted-foreground">
+                  of {formatCurrency(totalBudgetLimit)} budgeted
+                </p>
                 <div className="mt-3 flex items-center gap-2">
-                  <Badge variant="outline" className="text-success border-success/30">
-                    {formatCurrency(totalBudget - totalSpent)} remaining
+                  <Badge variant="outline" className={cn(
+                    totalBudgetSpent <= totalBudgetLimit ? "text-success border-success/30" : "text-destructive border-destructive/30"
+                  )}>
+                    {totalBudgetSpent <= totalBudgetLimit 
+                      ? `${formatCurrency(totalBudgetLimit - totalBudgetSpent)} remaining`
+                      : `${formatCurrency(totalBudgetSpent - totalBudgetLimit)} over budget`
+                    }
                   </Badge>
                   <span className="text-xs text-muted-foreground">{daysRemaining} days left</span>
                 </div>
@@ -310,58 +448,68 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <HorizontalBarChart data={categorySpending} height={160} />
+            {categorySpending.length > 0 ? (
+              <HorizontalBarChart data={categorySpending} height={160} />
+            ) : (
+              <div className="h-40 flex items-center justify-center text-muted-foreground">
+                No spending data yet
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Budget Health Cards */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Budget Health</h2>
-          <Link href="/budgets" className="text-sm text-primary hover:underline flex items-center">
-            Manage <ChevronRight className="h-4 w-4" />
-          </Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {budgets.map((budget) => {
-            const percentage = Math.min((budget.spent / budget.limit) * 100, 100);
-            const { color, status } = getBudgetStatus(budget.spent, budget.limit);
-            const isOver = budget.spent > budget.limit;
+      {budgets.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">Budget Health</h2>
+            <Link href="/budgets" className="text-sm text-primary hover:underline flex items-center">
+              Manage <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {budgets.slice(0, 6).map((budget) => {
+              const spent = budget.spent || 0;
+              const limit = budget.amount || 1;
+              const percentage = Math.min((spent / limit) * 100, 100);
+              const { color, status } = getBudgetStatus(spent, limit);
+              const isOver = spent > limit;
 
-            return (
-              <Card key={budget.id} className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{budget.emoji}</span>
-                      <span className="font-medium">{budget.category}</span>
+              return (
+                <Card key={budget.id} className="hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{budget.category_icon || '📊'}</span>
+                        <span className="font-medium">{budget.category_name}</span>
+                      </div>
+                      <Badge variant="outline" className={cn(
+                        'text-xs',
+                        isOver ? 'text-purple-400 border-purple-400/30' : ''
+                      )}>
+                        {status}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className={cn(
-                      'text-xs',
-                      isOver ? 'text-purple-400 border-purple-400/30' : ''
-                    )}>
-                      {status}
-                    </Badge>
-                  </div>
-                  <Progress value={percentage} className="h-2 mb-2" indicatorClassName={color} />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {formatCurrency(budget.spent)} / {formatCurrency(budget.limit)}
-                    </span>
-                    <span className={cn(
-                      'font-medium',
-                      isOver ? 'text-purple-400' : 'text-success'
-                    )}>
-                      {isOver ? `+${formatCurrency(budget.spent - budget.limit)}` : formatCurrency(budget.limit - budget.spent)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                    <Progress value={percentage} className="h-2 mb-2" indicatorClassName={color} />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {formatCurrency(spent)} / {formatCurrency(limit)}
+                      </span>
+                      <span className={cn(
+                        'font-medium',
+                        isOver ? 'text-purple-400' : 'text-success'
+                      )}>
+                        {isOver ? `+${formatCurrency(spent - limit)}` : formatCurrency(limit - spent)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Cash Flow Chart */}
       <Card className="mb-6">
@@ -392,37 +540,50 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="divide-y">
-            {recentTransactions.slice(0, 7).map((tx) => (
-              <div key={tx.id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors">
-                <div className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full',
-                  tx.type === 'debit' ? 'bg-destructive/10' : 'bg-success/10'
-                )}>
-                  {tx.type === 'debit' ? (
-                    <ArrowDownRight className="h-5 w-5 text-destructive" />
-                  ) : (
-                    <ArrowUpRight className="h-5 w-5 text-success" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{tx.merchant}</p>
-                  <Badge variant="secondary" className={cn('text-xs mt-1', tx.categoryColor, 'text-white')}>
-                    {tx.category}
-                  </Badge>
-                </div>
-                <div className="text-right">
-                  <p className={cn(
-                    'font-semibold',
-                    tx.type === 'debit' ? 'text-destructive' : 'text-success'
-                  )}>
-                    {tx.type === 'debit' ? '-' : '+'}{formatCurrency(Math.abs(tx.amount))}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{formatRelativeDate(tx.date)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {transactions.length > 0 ? (
+            <div className="divide-y">
+              {transactions.slice(0, 7).map((tx: Transaction) => {
+                const isDebit = tx.type === 'debit' || tx.amount < 0;
+                return (
+                  <div key={tx.id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors">
+                    <div className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-full',
+                      isDebit ? 'bg-destructive/10' : 'bg-success/10'
+                    )}>
+                      {isDebit ? (
+                        <ArrowDownRight className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <ArrowUpRight className="h-5 w-5 text-success" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{tx.description || tx.merchant_name || 'Transaction'}</p>
+                      {tx.category_name && (
+                        <Badge variant="secondary" className="text-xs mt-1">
+                          {tx.category_name}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className={cn(
+                        'font-semibold',
+                        isDebit ? 'text-destructive' : 'text-success'
+                      )}>
+                        {isDebit ? '-' : '+'}{formatCurrency(Math.abs(tx.amount))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.date ? formatRelativeDate(new Date(tx.date)) : ''}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">
+              No transactions yet
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -435,16 +596,19 @@ export default function DashboardPage() {
           </div>
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-4 pb-2">
-              {visibleInsights.map((insight) => (
+              {visibleInsights.map((insight: Insight) => (
                 <Card key={insight.id} className={cn(
                   'min-w-[280px] shrink-0',
-                  insight.type === 'warning' && 'border-warning/30 bg-warning/5',
-                  insight.type === 'success' && 'border-success/30 bg-success/5'
+                  insight.severity === 'warning' && 'border-warning/30 bg-warning/5',
+                  insight.severity === 'success' && 'border-success/30 bg-success/5'
                 )}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl">{insight.icon}</span>
-                      <p className="text-sm flex-1 whitespace-normal">{insight.text}</p>
+                      <span className="text-2xl">{getInsightIcon(insight.severity)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{insight.title}</p>
+                        <p className="text-sm text-muted-foreground whitespace-normal">{insight.message}</p>
+                      </div>
                       <Button 
                         size="icon" 
                         variant="ghost" 

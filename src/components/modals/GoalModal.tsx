@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Target, Calendar, Wallet, PiggyBank } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/api';
 
 interface Goal {
   id?: string;
@@ -29,13 +31,6 @@ interface GoalModalProps {
 
 const emojis = ['🎯', '🛡️', '💻', '✈️', '🏠', '🚗', '📚', '💍', '🎓', '🏖️', '💰', '🎁'];
 
-const accounts = [
-  { id: 'gtbank', name: 'GTBank Savings' },
-  { id: 'access', name: 'Access Current' },
-  { id: 'zenith', name: 'Zenith Salary' },
-  { id: 'none', name: 'No linked account' },
-];
-
 export function GoalModal({ goal, open, onOpenChange, onSave }: GoalModalProps) {
   const [name, setName] = useState(goal?.name || '');
   const [emoji, setEmoji] = useState(goal?.emoji || '🎯');
@@ -44,7 +39,28 @@ export function GoalModal({ goal, open, onOpenChange, onSave }: GoalModalProps) 
   const [deadline, setDeadline] = useState<Date | undefined>(
     goal?.deadline ? new Date(goal.deadline) : undefined
   );
-  const [linkedAccount, setLinkedAccount] = useState(goal?.linkedAccount || 'none');
+  const [linkedAccount, setLinkedAccount] = useState(goal?.linkedAccount || '');
+
+  // Fetch real accounts from API
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => api.getAccounts(),
+    enabled: open,
+  });
+
+  const accounts = accountsData?.accounts || [];
+
+  // Reset form when modal opens/closes or goal changes
+  useEffect(() => {
+    if (open) {
+      setName(goal?.name || '');
+      setEmoji(goal?.emoji || '🎯');
+      setTarget(goal?.target?.toString() || '');
+      setInitialAmount('0');
+      setDeadline(goal?.deadline ? new Date(goal.deadline) : undefined);
+      setLinkedAccount(goal?.linkedAccount || '');
+    }
+  }, [open, goal]);
 
   const handleSave = () => {
     if (!name || !target) return;
@@ -56,7 +72,7 @@ export function GoalModal({ goal, open, onOpenChange, onSave }: GoalModalProps) 
       target: parseFloat(target),
       current: goal?.current || parseFloat(initialAmount) || 0,
       deadline: deadline?.toISOString().split('T')[0],
-      linkedAccount: linkedAccount !== 'none' ? linkedAccount : undefined,
+      linkedAccount: linkedAccount || undefined,  // This is now the actual UUID from the API
     };
 
     onSave?.(newGoal);
@@ -182,6 +198,7 @@ export function GoalModal({ goal, open, onOpenChange, onSave }: GoalModalProps) 
                 <SelectValue placeholder="Select account" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="">No linked account</SelectItem>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
                     {account.name}

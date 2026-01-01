@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,36 +11,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-
-const categories = {
-  expense: [
-    { value: 'food', label: '🍕 Food & Dining' },
-    { value: 'transport', label: '🚗 Transportation' },
-    { value: 'shopping', label: '🛍️ Shopping' },
-    { value: 'bills', label: '💡 Bills & Utilities' },
-    { value: 'entertainment', label: '🎬 Entertainment' },
-    { value: 'health', label: '🏥 Healthcare' },
-    { value: 'education', label: '📚 Education' },
-  ],
-  income: [
-    { value: 'salary', label: '💰 Salary' },
-    { value: 'freelance', label: '💻 Freelance' },
-    { value: 'investment', label: '📈 Investments' },
-    { value: 'gift', label: '🎁 Gifts Received' },
-    { value: 'refund', label: '💵 Refunds' },
-    { value: 'other', label: '📥 Other Income' },
-  ],
-};
-
-const accounts = [
-  { value: 'gtbank', label: 'GTBank Savings' },
-  { value: 'access', label: 'Access Current' },
-  { value: 'zenith', label: 'Zenith Salary' },
-  { value: 'cash', label: 'Cash Wallet' },
-];
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 export default function TransactionNew() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -47,10 +28,70 @@ export default function TransactionNew() {
   const [account, setAccount] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Fetch real categories from API
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.getCategories(),
+  });
+
+  // Fetch real accounts from API
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => api.getAccounts(),
+  });
+
+  const categories = categoriesData?.categories || [];
+  const accounts = accountsData?.accounts || [];
+
+  // Filter categories based on type (income vs expense)
+  const expenseCategories = categories.filter(c => 
+    !['Salary', 'Freelance', 'Investments', 'Gifts Received', 'Refunds', 'Other Income'].includes(c.name)
+  );
+  const incomeCategories = categories.filter(c => 
+    ['Salary', 'Freelance', 'Investments', 'Gifts Received', 'Refunds', 'Other Income'].includes(c.name)
+  );
+
+  // Create transaction mutation
+  const createTransactionMutation = useMutation({
+    mutationFn: (data: any) => api.createManualTransaction(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      toast({
+        title: 'Transaction created',
+        description: 'Your transaction has been recorded.',
+      });
+      router.push('/transactions');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create transaction',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Submit to API
-    router.push('/transactions');
+    
+    if (!amount || !account || !date) {
+      toast({
+        title: 'Missing fields',
+        description: 'Please fill in all required fields.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    createTransactionMutation.mutate({
+      type: type === 'income' ? 'credit' : 'debit',
+      amount: parseFloat(amount),
+      date,
+      description: payee || 'Manual transaction',
+      category_id: category || undefined,
+      account_id: account,
+      notes,
+    });
   };
 
   return (
@@ -78,7 +119,12 @@ export default function TransactionNew() {
               <ToggleGroup
                 type="single"
                 value={type}
-                onValueChange={(v) => v && setType(v as 'expense' | 'income' | 'transfer')}
+                onValueChange={(v) => {
+                  if (v) {
+                    setType(v as 'expense' | 'income' | 'transfer');
+                    setCategory(''); // Reset category when type changes
+                  }
+                }}
                 className="justify-start"
               >
                 <ToggleGroupItem value="expense" className="flex-1 data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground">
@@ -95,7 +141,7 @@ export default function TransactionNew() {
 
             {/* Amount */}
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
+              <Label htmlFor="amount">Amount *</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₦</span>
                 <Input
@@ -105,18 +151,20 @@ export default function TransactionNew() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="pl-8 text-lg font-semibold"
+                  required
                 />
               </div>
             </div>
 
             {/* Date */}
             <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date">Date *</Label>
               <Input
                 id="date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                required
               />
             </div>
 
@@ -140,9 +188,12 @@ export default function TransactionNew() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories[type === 'income' ? 'income' : 'expense'].map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
+                    {(type === 'income' ? incomeCategories : expenseCategories).map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        <span className="flex items-center gap-2">
+                          <span>{cat.icon}</span>
+                          <span>{cat.name}</span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -152,39 +203,20 @@ export default function TransactionNew() {
 
             {/* Account */}
             <div className="space-y-2">
-              <Label>{type === 'transfer' ? 'From Account' : 'Account'}</Label>
-              <Select value={account} onValueChange={setAccount}>
+              <Label>{type === 'transfer' ? 'From Account' : 'Account'} *</Label>
+              <Select value={account} onValueChange={setAccount} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select account" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((acc) => (
-                    <SelectItem key={acc.value} value={acc.value}>
-                      {acc.label}
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* To Account for transfers */}
-            {type === 'transfer' && (
-              <div className="space-y-2">
-                <Label>To Account</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select destination" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.value} value={acc.value}>
-                        {acc.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             {/* Notes */}
             <div className="space-y-2">
@@ -198,8 +230,13 @@ export default function TransactionNew() {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12" size="lg">
-              Add Transaction
+            <Button 
+              type="submit" 
+              className="w-full h-12" 
+              size="lg"
+              disabled={createTransactionMutation.isPending}
+            >
+              {createTransactionMutation.isPending ? 'Creating...' : 'Add Transaction'}
             </Button>
           </form>
         </CardContent>

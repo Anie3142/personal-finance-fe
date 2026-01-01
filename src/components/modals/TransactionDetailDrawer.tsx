@@ -9,19 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency, formatDate } from '@/lib/format';
-
-interface Transaction {
-  id: string;
-  merchant: string;
-  description: string;
-  amount: number;
-  type: 'credit' | 'debit';
-  date: string;
-  category: string;
-  categoryColor?: string;
-  account?: string;
-  isManual?: boolean;
-}
+import type { Transaction } from '@/types/api';
 
 interface TransactionDetailDrawerProps {
   transaction: Transaction | null;
@@ -49,16 +37,16 @@ export function TransactionDetailDrawer({
   onSave,
   onDelete,
 }: TransactionDetailDrawerProps) {
-  const [category, setCategory] = useState(transaction?.category || '');
-  const [notes, setNotes] = useState('');
-  const [markRecurring, setMarkRecurring] = useState(false);
+  const [category, setCategory] = useState(transaction?.category_name || '');
+  const [notes, setNotes] = useState(transaction?.notes || '');
+  const [markRecurring, setMarkRecurring] = useState(transaction?.is_recurring || false);
   const [excludeFromReports, setExcludeFromReports] = useState(false);
 
   if (!transaction) return null;
 
   const handleSave = () => {
     if (onSave) {
-      onSave({ ...transaction, category });
+      onSave({ ...transaction, category_name: category });
     }
     onOpenChange(false);
   };
@@ -79,7 +67,7 @@ export function TransactionDetailDrawer({
                 {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
               </span>
             </p>
-            <p className="text-lg font-medium">{transaction.merchant}</p>
+            <p className="text-lg font-medium">{transaction.merchant_name || transaction.description}</p>
             <p className="text-sm text-muted-foreground">{transaction.description}</p>
           </div>
 
@@ -98,7 +86,7 @@ export function TransactionDetailDrawer({
                 <Tag className="h-4 w-4" />
                 <span className="text-sm">Account</span>
               </div>
-              <span className="font-medium">{transaction.account || 'GTBank Savings'}</span>
+              <span className="font-medium">{transaction.account_id || 'Unknown'}</span>
             </div>
           </div>
 
@@ -163,7 +151,7 @@ export function TransactionDetailDrawer({
               Split Transaction
             </Button>
             
-            {transaction.isManual && (
+            {onDelete && (
               <Button 
                 variant="outline" 
                 className="w-full justify-start text-destructive hover:text-destructive"

@@ -31,22 +31,73 @@ import type {
   ExportCreate,
 } from '@/types/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.personal-finance.namelesscompany.cc/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 
-class ApiClient {
-  private token: string | null = null;
+// Token cache
+let cachedToken: string | null = null;
+let tokenExpiresAt: number | null = null;
 
-  setToken(token: string | null) {
-    this.token = token;
+/**
+ * Fetch access token from the server-side API route
+ * Caches the token to avoid unnecessary requests
+ */
+async function getAccessToken(): Promise<string | null> {
+  // Return cached token if still valid (with 5 minute buffer)
+  if (cachedToken && tokenExpiresAt && Date.now() < tokenExpiresAt - 5 * 60 * 1000) {
+    return cachedToken;
   }
 
+  try {
+    const response = await fetch('/api/auth/token');
+    
+    if (!response.ok) {
+      // User is not authenticated
+      if (response.status === 401) {
+        cachedToken = null;
+        tokenExpiresAt = null;
+        return null;
+      }
+      throw new Error('Failed to get access token');
+    }
+
+    const data = await response.json();
+    cachedToken = data.accessToken;
+    
+    // Parse JWT to get expiration time (tokens typically expire in 24 hours)
+    try {
+      const payload = JSON.parse(atob(cachedToken!.split('.')[1]));
+      tokenExpiresAt = payload.exp * 1000; // Convert to milliseconds
+    } catch {
+      // Default to 1 hour if we can't parse
+      tokenExpiresAt = Date.now() + 60 * 60 * 1000;
+    }
+
+    return cachedToken;
+  } catch (error) {
+    console.error('Error fetching access token:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear the cached token (e.g., on logout)
+ */
+export function clearTokenCache() {
+  cachedToken = null;
+  tokenExpiresAt = null;
+}
+
+class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Get access token for authenticated requests
+    const token = await getAccessToken();
+    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     };
 
@@ -57,10 +108,22 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || `HTTP ${response.status}`);
+      
+      // If unauthorized, clear the token cache
+      if (response.status === 401) {
+        clearTokenCache();
+      }
+      
+      throw new Error(error.message || error.detail || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    // Handle empty responses
+    const text = await response.text();
+    if (!text) {
+      return {} as T;
+    }
+
+    return JSON.parse(text);
   }
 
   private get<T>(endpoint: string): Promise<T> {
@@ -77,6 +140,13 @@ class ApiClient {
   private patch<T>(endpoint: string, data: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  private put<T>(endpoint: string, data: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   }
@@ -105,6 +175,9 @@ class ApiClient {
   getAccounts = (type?: 'savings' | 'current' | 'credit') => 
     this.get<{ accounts: Account[] }>(`/accounts${type ? `?type=${type}` : ''}`);
   getAccount = (id: string) => this.get<Account>(`/accounts/${id}`);
+  createAccount = (data: Partial<Account>) => this.post<Account>('/accounts', data);
+  updateAccount = (id: string, data: Partial<Account>) => this.put<Account>(`/accounts/${id}`, data);
+  deleteAccount = (id: string) => this.delete<{ success: boolean }>(`/accounts/${id}`);
 
   // Transactions
   getTransactions = (filters?: TransactionFilters) => {
@@ -114,7 +187,8 @@ class ApiClient {
         if (value !== undefined) params.append(key, String(value));
       });
     }
-    return this.get<TransactionsResponse>(`/transactions?${params}`);
+    const query = params.toString();
+    return this.get<TransactionsResponse>(`/transactions${query ? `?${query}` : ''}`);
   };
   getTransaction = (id: string) => this.get<Transaction>(`/transactions/${id}`);
   updateTransaction = (id: string, data: TransactionUpdate) => this.patch<Transaction>(`/transactions/${id}`, data);
@@ -142,7 +216,8 @@ class ApiClient {
         if (value !== undefined) searchParams.append(key, String(value));
       });
     }
-    return this.get<{ budgets: Budget[] }>(`/budgets?${searchParams}`);
+    const query = searchParams.toString();
+    return this.get<{ budgets: Budget[] }>(`/budgets${query ? `?${query}` : ''}`);
   };
   getBudget = (id: string) => this.get<Budget & { transactions: Transaction[] }>(`/budgets/${id}`);
   getBudgetProgress = (id: string) => this.get<BudgetProgress>(`/budgets/${id}/progress`);

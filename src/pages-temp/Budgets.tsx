@@ -1,57 +1,134 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, ChevronLeft, ChevronRight, PiggyBank } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, TrendingUp, Edit, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/format';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { EmptyState, LoadingSkeleton } from '@/components/common';
-
-const budgetsData = [
-  { id: '1', category: 'Food & Dining', emoji: '🍕', budgeted: 80000, spent: 45000, color: '#f97316' },
-  { id: '2', category: 'Transportation', emoji: '🚗', budgeted: 40000, spent: 35000, color: '#3b82f6' },
-  { id: '3', category: 'Entertainment', emoji: '🎬', budgeted: 30000, spent: 28000, color: '#8b5cf6' },
-  { id: '4', category: 'Bills & Utilities', emoji: '💡', budgeted: 50000, spent: 48000, color: '#eab308' },
-  { id: '5', category: 'Shopping', emoji: '🛍️', budgeted: 25000, spent: 30000, color: '#ec4899' },
-  { id: '6', category: 'Healthcare', emoji: '🏥', budgeted: 20000, spent: 5000, color: '#ef4444' },
-];
-
-const totalBudgeted = budgetsData.reduce((sum, b) => sum + b.budgeted, 0);
-const totalSpent = budgetsData.reduce((sum, b) => sum + b.spent, 0);
-
-const pieData = [
-  { name: 'Spent', value: totalSpent, color: 'hsl(var(--primary))' },
-  { name: 'Remaining', value: Math.max(0, totalBudgeted - totalSpent), color: 'hsl(var(--muted))' },
-];
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import type { Budget, Category } from '@/types/api';
 
 export default function Budgets() {
+  const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<typeof budgetsData[0] | null>(null);
-  const [period, setPeriod] = useState('January 2025');
-  const [isLoading, setIsLoading] = useState(true);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  
+  // Form state
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [amount, setAmount] = useState('');
+  const [period, setPeriod] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
 
-  // Simulate loading state
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  // Fetch budgets from API
+  const { data: budgetsData, isLoading } = useQuery({
+    queryKey: ['budgets'],
+    queryFn: () => api.getBudgets(),
+  });
 
-  // For demo purposes - toggle this to see empty state
-  const showEmptyState = false;
-  const budgets = showEmptyState ? [] : budgetsData;
+  // Fetch categories for dropdown
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.getCategories(),
+  });
 
-  const getStatus = (spent: number, budgeted: number) => {
-    const percent = (spent / budgeted) * 100;
-    if (percent >= 100) return { color: 'bg-destructive', textColor: 'text-destructive', label: 'Over budget' };
-    if (percent >= 90) return { color: 'bg-warning', textColor: 'text-warning', label: 'Warning' };
-    if (percent >= 70) return { color: 'bg-warning', textColor: 'text-warning', label: 'Caution' };
-    return { color: 'bg-success', textColor: 'text-success', label: 'On track' };
+  // Create budget mutation
+  const createBudgetMutation = useMutation({
+    mutationFn: (data: { category_id: string; amount: number; period: string }) =>
+      api.createBudget(data as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      resetForm();
+    },
+  });
+
+  // Update budget mutation
+  const updateBudgetMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Budget> }) =>
+      api.updateBudget(id, data as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      resetForm();
+    },
+  });
+
+  // Delete budget mutation
+  const deleteBudgetMutation = useMutation({
+    mutationFn: (id: string) => api.deleteBudget(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+    },
+  });
+
+  const budgets = budgetsData?.budgets || [];
+  const categories = categoriesData?.categories || [];
+  
+  // Filter out categories that already have budgets
+  const availableCategories = categories.filter(
+    cat => !budgets.some(b => b.category_id === cat.id) || editingBudget?.category_id === cat.id
+  );
+
+  const resetForm = () => {
+    setSelectedCategory('');
+    setAmount('');
+    setPeriod('monthly');
+    setEditingBudget(null);
+    setIsDialogOpen(false);
+  };
+
+  const handleSave = () => {
+    if (!selectedCategory || !amount) return;
+
+    if (editingBudget) {
+      updateBudgetMutation.mutate({
+        id: editingBudget.id,
+        data: { amount: parseFloat(amount), period },
+      });
+    } else {
+      createBudgetMutation.mutate({
+        category_id: selectedCategory,
+        amount: parseFloat(amount),
+        period,
+      });
+    }
+  };
+
+  const handleEdit = (budget: Budget) => {
+    setEditingBudget(budget);
+    setSelectedCategory(budget.category_id);
+    setAmount(budget.amount.toString());
+    setPeriod(budget.period);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this budget?')) {
+      deleteBudgetMutation.mutate(id);
+    }
+  };
+
+  // Calculate totals
+  const totalBudgeted = budgets.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalSpent = budgets.reduce((sum, b) => sum + Number(b.spent || 0), 0);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'over_budget': return <AlertCircle className="h-5 w-5 text-destructive" />;
+      case 'warning': return <TrendingUp className="h-5 w-5 text-yellow-500" />;
+      default: return <CheckCircle2 className="h-5 w-5 text-success" />;
+    }
+  };
+
+  const getStatusColor = (percentage: number) => {
+    if (percentage >= 100) return 'bg-destructive';
+    if (percentage >= 70) return 'bg-yellow-500';
+    return 'bg-success';
   };
 
   if (isLoading) {
@@ -63,8 +140,7 @@ export default function Budgets() {
             <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
-        <LoadingSkeleton variant="stat" count={4} className="mb-6" />
-        <LoadingSkeleton variant="card" count={6} />
+        <LoadingSkeleton variant="card" count={4} />
       </div>
     );
   }
@@ -75,19 +151,11 @@ export default function Budgets() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Budgets</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Button variant="ghost" size="icon" className="h-6 w-6">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-muted-foreground">{period}</span>
-            <Button variant="ghost" size="icon" className="h-6 w-6">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <p className="text-muted-foreground">Track spending by category</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
-          if (!open) setEditingBudget(null);
+          if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
             <Button>
@@ -97,43 +165,44 @@ export default function Budgets() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingBudget ? 'Edit Budget' : 'Create Budget'}</DialogTitle>
-              <DialogDescription>
-                {editingBudget ? 'Update your budget settings' : 'Set a spending limit for a category'}
-              </DialogDescription>
+              <DialogTitle>{editingBudget ? 'Edit Budget' : 'Create New Budget'}</DialogTitle>
+              <DialogDescription>Set a spending limit for a category</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select defaultValue={editingBudget?.category.toLowerCase().replace(/ & /g, '-')}>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={!!editingBudget}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="food-dining">🍕 Food & Dining</SelectItem>
-                    <SelectItem value="transportation">🚗 Transportation</SelectItem>
-                    <SelectItem value="entertainment">🎬 Entertainment</SelectItem>
-                    <SelectItem value="shopping">🛍️ Shopping</SelectItem>
-                    <SelectItem value="bills-utilities">💡 Bills & Utilities</SelectItem>
-                    <SelectItem value="healthcare">🏥 Healthcare</SelectItem>
+                    {availableCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        <span className="flex items-center gap-2">
+                          <span>{cat.icon}</span>
+                          <span>{cat.name}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Amount</Label>
+                <Label>Budget Amount</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₦</span>
                   <Input 
                     type="number" 
-                    placeholder="50000" 
-                    className="pl-8"
-                    defaultValue={editingBudget?.budgeted}
+                    placeholder="80,000" 
+                    className="pl-8" 
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Period</Label>
-                <Select defaultValue="monthly">
+                <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -144,24 +213,23 @@ export default function Budgets() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch id="rollover" />
-                <Label htmlFor="rollover">Rollover unused amount</Label>
-              </div>
-              <Button className="w-full" onClick={() => {
-                setIsDialogOpen(false);
-                setEditingBudget(null);
-              }}>
-                {editingBudget ? 'Save Changes' : 'Create Budget'}
-              </Button>
             </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={resetForm}>Cancel</Button>
+              <Button 
+                onClick={handleSave}
+                disabled={!selectedCategory || !amount || createBudgetMutation.isPending || updateBudgetMutation.isPending}
+              >
+                {createBudgetMutation.isPending || updateBudgetMutation.isPending ? 'Saving...' : (editingBudget ? 'Save Changes' : 'Create Budget')}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       {budgets.length === 0 ? (
         <EmptyState
-          icon={<PiggyBank className="h-8 w-8" />}
+          icon={<Wallet className="h-8 w-8" />}
           title="No budgets yet"
           description="Create your first budget to start tracking your spending by category."
           action={
@@ -173,115 +241,88 @@ export default function Budgets() {
         />
       ) : (
         <>
-          {/* Summary */}
-          <Card className="mb-6">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row items-center gap-6">
-            <div className="w-48 h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 text-center lg:text-left">
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Budgeted</p>
-                  <p className="text-2xl font-bold">{formatCurrency(totalBudgeted)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Spent</p>
-                  <p className="text-2xl font-bold">{formatCurrency(totalSpent)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Remaining</p>
-                  <p className="text-2xl font-bold text-success">
-                    {formatCurrency(Math.max(0, totalBudgeted - totalSpent))}
-                  </p>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                {Math.round((totalSpent / totalBudgeted) * 100)}% of your budget used • 15 days remaining
-              </p>
-            </div>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Total Budgeted</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalBudgeted)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Total Spent</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalSpent)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Remaining</p>
+                <p className={`text-2xl font-bold ${totalBudgeted - totalSpent < 0 ? 'text-destructive' : 'text-success'}`}>
+                  {formatCurrency(totalBudgeted - totalSpent)}
+                </p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Budget cards grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {budgets.map((budget) => {
-          const percent = Math.min(100, (budget.spent / budget.budgeted) * 100);
-          const remaining = budget.budgeted - budget.spent;
-          const status = getStatus(budget.spent, budget.budgeted);
-
-          return (
-            <Link key={budget.id} href={`/budgets/${budget.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
+          {/* Budget List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {budgets.map((budget) => (
+              <Card key={budget.id} className="group">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{budget.emoji}</span>
+                      <div 
+                        className="h-10 w-10 rounded-lg flex items-center justify-center text-xl"
+                        style={{ backgroundColor: `${budget.category_color}20` }}
+                      >
+                        {budget.category_icon}
+                      </div>
                       <div>
-                        <h3 className="font-medium">{budget.category}</h3>
-                        <p className={`text-sm ${status.textColor}`}>{status.label}</p>
+                        <CardTitle className="text-base">{budget.category_name}</CardTitle>
+                        <CardDescription className="capitalize">{budget.period}</CardDescription>
                       </div>
                     </div>
+                    {getStatusIcon(budget.status)}
                   </div>
-                  <Progress
-                    value={percent}
-                    className="h-2 mb-3"
-                    style={{
-                      '--progress-background': budget.color,
-                    } as React.CSSProperties}
-                  />
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {formatCurrency(budget.spent)} / {formatCurrency(budget.budgeted)}
-                    </span>
-                    <span className={remaining < 0 ? 'text-destructive' : 'text-foreground'}>
-                      {remaining < 0 ? '-' : ''}{formatCurrency(Math.abs(remaining))} {remaining < 0 ? 'over' : 'left'}
-                    </span>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <Progress 
+                      value={Math.min(budget.percentage || 0, 100)} 
+                      className="h-2"
+                    />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {formatCurrency(Number(budget.spent || 0))} spent
+                      </span>
+                      <span className="font-medium">
+                        {formatCurrency(Number(budget.amount))}
+                      </span>
+                    </div>
+                    <p className={`text-sm ${budget.remaining < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {budget.remaining < 0 
+                        ? `${formatCurrency(Math.abs(Number(budget.remaining)))} over budget`
+                        : `${formatCurrency(Number(budget.remaining))} remaining`
+                      }
+                    </p>
+                  </div>
+                  {/* Edit/Delete buttons */}
+                  <div className="flex gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(budget)}>
+                      <Edit className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleDelete(budget.id)}>
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Unbudgeted spending */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Unbudgeted Spending</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🎁</span>
-              <span>Gifts & Donations</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <span>{formatCurrency(15000)} spent</span>
-              <Button size="sm" variant="outline">Add budget</Button>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-      </>
+        </>
       )}
     </div>
   );

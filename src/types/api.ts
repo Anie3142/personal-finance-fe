@@ -207,6 +207,7 @@ export interface GoalCreate {
 export interface RecurringTransaction {
   id: string;
   name: string;
+  icon: string;
   amount: number;
   frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
   next_date: string;
