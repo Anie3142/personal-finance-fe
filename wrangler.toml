@@ -1,3 +1,9 @@
 name = "personal-finance-fe"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".open-next"
+
+# KV bindings for Next.js cache (optional - for production caching)
+# [[kv_namespaces]]
+# binding = "NEXT_CACHE_WORKERS_KV"
+# id = "<your-kv-namespace-id>"
