@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NODE_OPTIONS='--max-old-space-size=4096' npx @opennextjs/cloudflare build",
-    "build:local": "next build",
+    "build": "next build",
+    "build:cloudflare": "NODE_OPTIONS='--max-old-space-size=4096' npx @opennextjs/cloudflare build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "start": "next start",
