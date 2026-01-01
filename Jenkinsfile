@@ -6,19 +6,33 @@
 // =============================================================================
 
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:20'
+            args '-u root'  // Required for npm global installs
+        }
+    }
 
     environment {
         CLOUDFLARE_ACCOUNT_ID = credentials('cloudflare-account-id')
         CLOUDFLARE_API_TOKEN = credentials('cloudflare-api-token')
         NODE_OPTIONS = '--max-old-space-size=4096'
-    }
-
-    tools {
-        nodejs 'NodeJS-20'  // Requires NodeJS plugin with "NodeJS-20" configured
+        HOME = '/tmp'  // Ensure npm cache works in Docker
+        npm_config_cache = '/tmp/.npm'
     }
 
     stages {
+        stage('Setup') {
+            steps {
+                script {
+                    echo "🔧 Setting up build environment..."
+                    sh 'node --version'
+                    sh 'npm --version'
+                    echo "✅ Node.js environment ready"
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
