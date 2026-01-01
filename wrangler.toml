@@ -23,6 +23,6 @@ VITE_API_BASE_URL = "https://personal-finance-api.namelesscompany.cc"
 # binding = "NEXT_CACHE_WORKERS_KV"
 # id = "<your-kv-namespace-id>"
 
-# Routes - Cloudflare will handle routing via DNS
-# The Workers domain will be: personal-finance-fe.<account>.workers.dev
-# Custom domain managed via Cloudflare DNS
+# Workers domain: personal-finance-fe.aniebiet-ccie.workers.dev
+# Custom domain is managed via Cloudflare Pages (see Terraform)
+# To use Workers custom domain, API token needs Workers Routes permission
