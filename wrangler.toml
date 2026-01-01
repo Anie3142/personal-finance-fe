@@ -1,9 +1,28 @@
+# Cloudflare Workers configuration for Next.js app
+# Deployed via Jenkins CI/CD pipeline
+
 name = "personal-finance-fe"
+main = ".open-next/worker.js"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".open-next"
+
+# Static assets configuration for Next.js
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# Environment variables for production
+[vars]
+NEXT_PUBLIC_AUTH0_DOMAIN = "dev-54nxe440ro81hlb6.us.auth0.com"
+NEXT_PUBLIC_AUTH0_CLIENT_ID = "SM3sFfXc1ntYVIeWY1g16pVnuSsYUI7k"
+NEXT_PUBLIC_AUTH0_REDIRECT_URI = "https://personal-finance.namelesscompany.cc"
+VITE_API_BASE_URL = "https://personal-finance-api.namelesscompany.cc"
 
 # KV bindings for Next.js cache (optional - for production caching)
 # [[kv_namespaces]]
 # binding = "NEXT_CACHE_WORKERS_KV"
 # id = "<your-kv-namespace-id>"
+
+# Routes - Cloudflare will handle routing via DNS
+# The Workers domain will be: personal-finance-fe.<account>.workers.dev
+# Custom domain managed via Cloudflare DNS
