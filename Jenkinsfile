@@ -6,33 +6,15 @@
 // =============================================================================
 
 pipeline {
-    agent {
-        docker {
-            image 'node:20'
-            args '-u root'  // Required for npm global installs
-        }
-    }
+    agent any
 
     environment {
         CLOUDFLARE_ACCOUNT_ID = credentials('cloudflare-account-id')
         CLOUDFLARE_API_TOKEN = credentials('cloudflare-api-token')
         NODE_OPTIONS = '--max-old-space-size=4096'
-        HOME = '/tmp'  // Ensure npm cache works in Docker
-        npm_config_cache = '/tmp/.npm'
     }
 
     stages {
-        stage('Setup') {
-            steps {
-                script {
-                    echo "🔧 Setting up build environment..."
-                    sh 'node --version'
-                    sh 'npm --version'
-                    echo "✅ Node.js environment ready"
-                }
-            }
-        }
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -44,7 +26,9 @@ pipeline {
             steps {
                 script {
                     echo "📦 Installing Node.js dependencies..."
-                    sh 'npm ci'
+                    sh '''
+                        docker run --rm -v "$(pwd)":/app -w /app node:20 npm ci
+                    '''
                     echo "✅ Dependencies installed"
                 }
             }
@@ -54,7 +38,9 @@ pipeline {
             steps {
                 script {
                     echo "🔍 Running lint and type checks..."
-                    sh 'npm run lint || echo "Lint warnings found, continuing..."'
+                    sh '''
+                        docker run --rm -v "$(pwd)":/app -w /app node:20 npm run lint || echo "Lint warnings found, continuing..."
+                    '''
                     echo "✅ Code quality checks complete"
                 }
             }
@@ -70,7 +56,11 @@ pipeline {
                     echo "Git commit: ${gitHash}"
                     
                     // Build using the OpenNext Cloudflare adapter
-                    sh 'npx @opennextjs/cloudflare build'
+                    sh '''
+                        docker run --rm -v "$(pwd)":/app -w /app \
+                            -e NODE_OPTIONS="--max-old-space-size=4096" \
+                            node:20 npx @opennextjs/cloudflare build
+                    '''
                     
                     echo "✅ Build complete! Output in .open-next/"
                 }
@@ -86,9 +76,12 @@ pipeline {
                     echo "🚀 Deploying to Cloudflare Workers..."
                     
                     // Deploy using wrangler
-                    sh '''
-                        npx wrangler deploy --config wrangler.toml
-                    '''
+                    sh """
+                        docker run --rm -v "\$(pwd)":/app -w /app \
+                            -e CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}" \
+                            -e CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
+                            node:20 npx wrangler deploy --config wrangler.toml
+                    """
                     
                     echo "✅ Deployed to Cloudflare Workers!"
                 }
@@ -148,6 +141,7 @@ pipeline {
         cleanup {
             // Clean up node_modules and build artifacts to save space
             sh 'rm -rf node_modules .open-next .next || true'
+            sh 'docker system prune -f || true'
         }
     }
 }
