@@ -23,6 +23,9 @@ VITE_API_BASE_URL = "https://personal-finance-api.namelesscompany.cc"
 # binding = "NEXT_CACHE_WORKERS_KV"
 # id = "<your-kv-namespace-id>"
 
-# Workers domain: personal-finance-fe.aniebiet-ccie.workers.dev
-# Custom domain is managed via Cloudflare Pages (see Terraform)
-# To use Workers custom domain, API token needs Workers Routes permission
+# Custom domain - Workers will respond to this domain
+# This automatically creates DNS record and SSL certificate
+# Required API Token Permission: Zone > Workers Routes > Edit
+[[routes]]
+pattern = "personal-finance.namelesscompany.cc"
+custom_domain = true
