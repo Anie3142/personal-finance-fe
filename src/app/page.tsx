@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuth0 } from '@auth0/auth0-react';
 import { ArrowRight, Shield, Zap, PiggyBank, Target, BarChart3, Repeat, CheckCircle, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,12 +27,23 @@ const navItems = [
   { name: 'Features', href: '#features' },
   { name: 'How It Works', href: '#how-it-works' },
   { name: 'Pricing', href: '/pricing' },
-  { name: 'Demo', href: '/demo' },
 ];
 
 export default function Index() {
-  const { user, isLoading } = useUser();
+  const { user, isLoading, loginWithRedirect, logout } = useAuth0();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogin = () => {
+    loginWithRedirect({
+      appState: { returnTo: '/dashboard' },
+    });
+  };
+
+  const handleLogout = () => {
+    logout({
+      logoutParams: { returnTo: window.location.origin },
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -70,18 +81,18 @@ export default function Index() {
                 <Button variant="ghost" asChild className="hidden sm:flex">
                   <Link href="/dashboard">Dashboard</Link>
                 </Button>
-                <Button variant="outline" asChild>
-                  <Link href="/api/auth/logout">Log out</Link>
+                <Button variant="outline" onClick={handleLogout}>
+                  Log out
                 </Button>
               </>
             ) : (
               // Not logged in - show login and signup
               <>
-                <Button variant="ghost" asChild className="hidden sm:flex">
-                  <Link href="/api/auth/login">Log in</Link>
+                <Button variant="ghost" className="hidden sm:flex" onClick={handleLogin}>
+                  Log in
                 </Button>
-                <Button asChild>
-                  <Link href="/api/auth/login?returnTo=/onboarding/welcome">Get Started</Link>
+                <Button onClick={handleLogin}>
+                  Get Started
                 </Button>
               </>
             )}
@@ -129,17 +140,17 @@ export default function Index() {
             </p>
             <div className="mx-auto flex max-w-md flex-col gap-3 sm:flex-row">
               <Input placeholder="Enter your email" className="h-12" />
-              <Button size="lg" className="h-12 gap-2" asChild>
-                {user ? (
+              {user ? (
+                <Button size="lg" className="h-12 gap-2" asChild>
                   <Link href="/dashboard">
                     Go to Dashboard <ArrowRight className="h-4 w-4" />
                   </Link>
-                ) : (
-                  <Link href="/api/auth/login?returnTo=/onboarding/welcome">
-                    Get Started Free <ArrowRight className="h-4 w-4" />
-                  </Link>
-                )}
-              </Button>
+                </Button>
+              ) : (
+                <Button size="lg" className="h-12 gap-2" onClick={handleLogin}>
+                  Get Started Free <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><CheckCircle className="h-4 w-4 text-success" /> Free to start</span>
@@ -197,17 +208,17 @@ export default function Index() {
         <div className="container text-center">
           <h2 className="mb-4 text-3xl font-bold">Ready to Take Control?</h2>
           <p className="mb-8 text-primary-foreground/80">Join thousands of Nigerians managing their money smarter</p>
-          <Button size="lg" variant="secondary" className="gap-2" asChild>
-            {user ? (
+          {user ? (
+            <Button size="lg" variant="secondary" className="gap-2" asChild>
               <Link href="/dashboard">
                 Go to Dashboard <ArrowRight className="h-4 w-4" />
               </Link>
-            ) : (
-              <Link href="/api/auth/login?returnTo=/onboarding/welcome">
-                Start Free Today <ArrowRight className="h-4 w-4" />
-              </Link>
-            )}
-          </Button>
+            </Button>
+          ) : (
+            <Button size="lg" variant="secondary" className="gap-2" onClick={handleLogin}>
+              Start Free Today <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </section>
 
