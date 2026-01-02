@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth0 } from '@auth0/auth0-react';
 import {
   LayoutDashboard,
   CreditCard,
@@ -131,6 +132,12 @@ function NavSection({
 }
 
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
+  const { logout } = useAuth0();
+
+  const handleLogout = () => {
+    logout({ logoutParams: { returnTo: window.location.origin } });
+  };
+
   return (
     <aside
       className={cn(
@@ -165,8 +172,8 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Footer */}
       <div className="border-t border-sidebar-border p-2">
-        <Link
-          href="/api/auth/logout"
+        <button
+          onClick={handleLogout}
           className={cn(
             'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium w-full',
             'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -175,7 +182,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
         >
           <LogOut className="h-4 w-4" />
           {!collapsed && <span>Log out</span>}
-        </Link>
+        </button>
       </div>
 
       {/* Collapse Toggle */}

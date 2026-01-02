@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuth0 } from '@auth0/auth0-react';
 import { PiggyBank, Check, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,6 @@ const pricingPlans = [
       '1 savings goal',
     ],
     cta: 'Get Started Free',
-    href: '/api/auth/login?returnTo=/onboarding/welcome',
     highlight: false,
   },
   {
@@ -37,7 +36,6 @@ const pricingPlans = [
       'Bill reminders',
     ],
     cta: 'Go Premium',
-    href: '/api/auth/login?returnTo=/onboarding/welcome',
     highlight: true,
   },
   {
@@ -54,7 +52,7 @@ const pricingPlans = [
       'Dedicated account manager',
     ],
     cta: 'Contact Sales',
-    href: '/contact',
+    isContactSales: true,
     highlight: false,
   },
 ];
@@ -79,7 +77,13 @@ const faqItems = [
 ];
 
 export default function PricingPage() {
-  const { user } = useUser();
+  const { user, loginWithRedirect } = useAuth0();
+
+  const handleLogin = () => {
+    loginWithRedirect({
+      appState: { returnTo: '/dashboard' },
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,9 +108,7 @@ export default function PricingPage() {
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
             ) : (
-              <Button asChild>
-                <Link href="/api/auth/login">Log in</Link>
-              </Button>
+              <Button onClick={handleLogin}>Log in</Button>
             )}
           </div>
         </div>
@@ -157,13 +159,31 @@ export default function PricingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Button
-                    className="w-full"
-                    variant={plan.highlight ? 'default' : 'outline'}
-                    asChild
-                  >
-                    <Link href={user ? '/dashboard' : plan.href}>{plan.cta}</Link>
-                  </Button>
+                  {plan.isContactSales ? (
+                    <Button
+                      className="w-full"
+                      variant={plan.highlight ? 'default' : 'outline'}
+                      asChild
+                    >
+                      <Link href="/contact">{plan.cta}</Link>
+                    </Button>
+                  ) : user ? (
+                    <Button
+                      className="w-full"
+                      variant={plan.highlight ? 'default' : 'outline'}
+                      asChild
+                    >
+                      <Link href="/dashboard">{plan.cta}</Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      variant={plan.highlight ? 'default' : 'outline'}
+                      onClick={handleLogin}
+                    >
+                      {plan.cta}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
