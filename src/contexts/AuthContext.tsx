@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import React, { createContext, useContext, ReactNode } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 
 interface User {
   id: string;
@@ -21,40 +21,42 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { user: auth0User, isLoading: auth0Loading } = useUser();
-  const [user, setUser] = useState<User | null>(null);
+  const { 
+    user: auth0User, 
+    isLoading, 
+    isAuthenticated,
+    loginWithRedirect,
+    logout: auth0Logout
+  } = useAuth0();
 
-  useEffect(() => {
-    if (auth0User) {
-      setUser({
-        id: auth0User.sub || '',
-        email: auth0User.email || '',
-        name: auth0User.name || '',
-        picture: auth0User.picture || undefined,
-      });
-    } else {
-      setUser(null);
-    }
-  }, [auth0User]);
+  // Map Auth0 user to our User type
+  const user: User | null = auth0User ? {
+    id: auth0User.sub || '',
+    email: auth0User.email || '',
+    name: auth0User.name || '',
+    picture: auth0User.picture || undefined,
+  } : null;
 
   const login = () => {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/api/auth/login';
-    }
+    loginWithRedirect({
+      appState: { returnTo: window.location.pathname },
+    });
   };
 
   const logout = () => {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/api/auth/logout';
-    }
+    auth0Logout({
+      logoutParams: {
+        returnTo: window.location.origin,
+      },
+    });
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isLoading: auth0Loading,
-        isAuthenticated: !!auth0User,
+        isLoading,
+        isAuthenticated,
         login,
         logout,
       }}
@@ -64,10 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuthContext() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuthContext must be used within an AuthProvider');
   }
   return context;
 }
+
+// For backwards compatibility - re-export as useAuth
+export const useAuth = useAuthContext;
