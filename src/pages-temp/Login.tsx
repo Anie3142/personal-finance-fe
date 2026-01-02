@@ -1,20 +1,22 @@
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Lock, CheckCircle } from 'lucide-react';
 
 export default function Login() {
+  const { login } = useAuth();
+
   const handleAuth0Login = () => {
-    // Auth0 login will be triggered here
-    // For now, redirect to dashboard for demo
-    window.location.href = '/dashboard';
+    // Trigger Auth0 login with redirect to dashboard
+    login('/dashboard');
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5" />
-      
+
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -32,7 +34,7 @@ export default function Login() {
             <CardDescription>Sign in to your account to continue</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <Button 
+            <Button
               onClick={handleAuth0Login}
               className="w-full h-12 text-base font-medium"
               size="lg"

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Lock, CheckCircle, TrendingUp, PiggyBank, BarChart3 } from 'lucide-react';
@@ -10,17 +11,25 @@ const benefits = [
 ];
 
 export default function Signup() {
+  const { loginWithRedirect } = useAuth0();
+
   const handleAuth0Signup = () => {
-    // Auth0 signup will be triggered here
-    // For now, redirect to onboarding for demo
-    window.location.href = '/onboarding/welcome';
+    // Trigger Auth0 signup
+    loginWithRedirect({
+      authorizationParams: {
+        screen_hint: 'signup',
+      },
+      appState: {
+        returnTo: '/onboarding/welcome',
+      },
+    });
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5" />
-      
+
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -48,7 +57,7 @@ export default function Signup() {
               ))}
             </div>
 
-            <Button 
+            <Button
               onClick={handleAuth0Signup}
               className="w-full h-12 text-base font-medium"
               size="lg"
