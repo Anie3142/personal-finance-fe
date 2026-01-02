@@ -192,13 +192,13 @@ export function GoalModal({ goal, open, onOpenChange, onSave }: GoalModalProps) 
           {/* Link to Account */}
           <div className="space-y-2">
             <Label>Link to Account (Optional)</Label>
-            <Select value={linkedAccount} onValueChange={setLinkedAccount}>
+            <Select value={linkedAccount || "none"} onValueChange={(val) => setLinkedAccount(val === "none" ? "" : val)}>
               <SelectTrigger>
                 <Wallet className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Select account" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No linked account</SelectItem>
+                <SelectItem value="none">No linked account</SelectItem>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
                     {account.name}

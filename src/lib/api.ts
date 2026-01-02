@@ -252,6 +252,8 @@ class ApiClient {
     if (categoryIds?.length) params.append('category_ids', categoryIds.join(','));
     return this.get<{ trends: SpendingTrend[] }>(`/reports/spending-trends?${params}`);
   };
+  getCashFlow = () => 
+    this.get<{ cash_flow: { month: string; income: number; expenses: number }[] }>('/reports/cash-flow');
 
   // Insights
   getInsights = () => this.get<{ insights: Insight[] }>('/insights');

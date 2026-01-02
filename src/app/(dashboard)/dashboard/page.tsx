@@ -42,6 +42,7 @@ import {
   useBudgets,
   useInsights,
   useNetWorth,
+  useCashFlow,
   useSyncConnection,
 } from '@/hooks/useApi';
 import type { Transaction, Budget, Insight } from '@/types/api';
@@ -135,6 +136,7 @@ export default function DashboardPage() {
   const { data: budgetsData, isLoading: budgetsLoading } = useBudgets();
   const { data: insightsData } = useInsights();
   const { data: netWorthData } = useNetWorth('6months');
+  const { data: cashFlowData } = useCashFlow();
   const syncConnection = useSyncConnection();
 
   // Computed values
@@ -184,15 +186,19 @@ export default function DashboardPage() {
     return [{ value: totalBalance }];
   }, [netWorthData, totalBalance]);
 
-  // Cash flow data (placeholder - would need separate API endpoint)
-  const cashFlowData = useMemo(() => {
+  // Cash flow data from API
+  const cashFlowChartData = useMemo(() => {
+    if (cashFlowData?.cash_flow && cashFlowData.cash_flow.length > 0) {
+      return cashFlowData.cash_flow;
+    }
+    // Fallback to empty data
     const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
     return months.map(month => ({
       month,
       income: 0,
       expenses: 0,
     }));
-  }, []);
+  }, [cashFlowData]);
 
   const daysRemaining = useMemo(() => {
     const now = new Date();
@@ -527,7 +533,7 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <CashFlowChart data={cashFlowData} />
+          <CashFlowChart data={cashFlowChartData} />
         </CardContent>
       </Card>
 

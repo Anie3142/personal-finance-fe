@@ -397,6 +397,13 @@ export function useSpendingTrends(period: string, categoryIds?: string[]) {
   });
 }
 
+export function useCashFlow() {
+  return useQuery({
+    queryKey: ['cash-flow'],
+    queryFn: () => api.getCashFlow(),
+  });
+}
+
 // Insight Hooks
 export function useInsights() {
   return useQuery({
