@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthTokenSync } from '@/components/auth/AuthTokenSync';
 import { useState } from 'react';
 
 // Auth0 configuration from environment variables
@@ -64,7 +65,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <TooltipProvider>
               <Toaster />
               <Sonner />
-              {children}
+              <AuthTokenSync>
+                {children}
+              </AuthTokenSync>
             </TooltipProvider>
           </ThemeProvider>
         </QueryClientProvider>
