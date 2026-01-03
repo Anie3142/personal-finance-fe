@@ -1,12 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Calendar, Bell, Edit, Trash2, PauseCircle, PlayCircle, Repeat } from 'lucide-react';
+import { Plus, Calendar, Bell, Edit, Trash2, PauseCircle, PlayCircle, Repeat, MoreVertical, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { RecurringModal } from '@/components/modals';
 import { EmptyState, LoadingSkeleton } from '@/components/common';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,14 +26,20 @@ export default function Recurring() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState<RecurringTransaction | null>(null);
 
-  // Fetch recurring transactions from API
-  const { data: recurringData, isLoading } = useQuery({
-    queryKey: ['recurring'],
-    queryFn: () => api.getRecurring(),
+  // Fetch recurring income
+  const { data: incomeData, isLoading: isIncomeLoading } = useQuery({
+    queryKey: ['recurring', 'income'],
+    queryFn: () => api.getRecurring('income'),
+  });
+
+  // Fetch recurring expenses
+  const { data: expenseData, isLoading: isExpenseLoading } = useQuery({
+    queryKey: ['recurring', 'expense'],
+    queryFn: () => api.getRecurring('expense'),
   });
 
   // Fetch upcoming
-  const { data: upcomingData } = useQuery({
+  const { data: upcomingData, isLoading: isUpcomingLoading } = useQuery({
     queryKey: ['recurring-upcoming'],
     queryFn: () => api.getRecurringUpcoming(),
   });
@@ -61,12 +75,24 @@ export default function Recurring() {
     },
   });
 
-  const recurring = recurringData?.recurring || [];
-  const upcoming = upcomingData?.upcoming || [];
+  // Helper to check if item is income (via type or name prefix workaround)
+  const isIncome = (r: RecurringTransaction) => r.type === 'income' || r.name.startsWith('[Income] ');
+
+  const recurringIncome = (incomeData?.recurring || []).filter(r => isIncome(r));
+  // Include items with no type as expenses (legacy behavior) or explicit expense/bill types, BUT exclude detected income
+  const recurringExpenses = (expenseData?.recurring || []).filter(r => (!r.type || r.type === 'expense' || r.type === 'bill') && !isIncome(r));
+
+  // Merge for upcoming check if needed, or rely on upcoming endpoint
+  // Filter out income from upcoming list (only show bills/expenses)
+  const upcomingRaw = upcomingData?.upcoming || [];
+  const upcoming = upcomingRaw.filter((item: RecurringTransaction) => !isIncome(item));
   const totalDue = upcomingData?.total_due_30_days || 0;
 
-  const bills = recurring.filter(r => r.amount > 0 && r.status === 'active');
-  const paused = recurring.filter(r => r.status === 'paused');
+  const bills = recurringExpenses.filter(r => r.status === 'active');
+  const incomeItems = recurringIncome.filter(r => r.status === 'active');
+
+  // Paused items from both
+  const paused = [...recurringIncome, ...recurringExpenses].filter(r => r.status === 'paused');
 
   const handleSave = (data: any) => {
     if (editingRecurring) {
@@ -81,6 +107,7 @@ export default function Recurring() {
           category_id: data.category,
           account_id: data.account,
           reminder_days: data.reminderDays,
+          type: data.type,
         },
       });
     } else {
@@ -89,13 +116,15 @@ export default function Recurring() {
         icon: data.icon,
         amount: data.amount,
         frequency: data.frequency.toLowerCase(),
-        start_date: data.nextDate,
+        start_date: new Date().toISOString().split('T')[0],
         category_id: data.category,
         account_id: data.account,
         reminder_days: data.reminderDays,
+        type: data.type,
       });
     }
   };
+
 
   const handleEdit = (item: RecurringTransaction) => {
     setEditingRecurring(item);
@@ -123,6 +152,8 @@ export default function Recurring() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
+
+  const isLoading = isIncomeLoading || isExpenseLoading || isUpcomingLoading;
 
   if (isLoading) {
     return (
@@ -155,7 +186,7 @@ export default function Recurring() {
         </Button>
       </div>
 
-      {recurring.length === 0 ? (
+      {recurringIncome.length === 0 && recurringExpenses.length === 0 ? (
         <EmptyState
           icon={<Repeat className="h-8 w-8" />}
           title="No recurring transactions"
@@ -191,30 +222,56 @@ export default function Recurring() {
             </Card>
           </div>
 
-          {/* Upcoming */}
+          {/* Upcoming This Month Timeline Card */}
           {upcoming.length > 0 && (
-            <Card className="mb-6">
+            <Card className="mb-8 bg-gradient-to-br from-warning/5 via-background to-background border-warning/20">
               <CardHeader>
-                <CardTitle className="text-lg">Upcoming This Month</CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📅</span>
+                    <CardTitle className="text-lg">Upcoming This Month</CardTitle>
+                  </div>
+                  <span className="text-sm font-medium">{formatCurrency(totalDue)} due</span>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {upcoming.slice(0, 5).map((item) => {
+                <div className="space-y-6">
+                  {upcoming.map((item) => {
                     const daysUntil = getDaysUntil(item.next_date);
+                    // Calculate progress based on a 30-day billing cycle assumption for visualization
+                    // 0 days left = 100% (Urgent), 30 days left = 0%
+                    const progress = Math.max(0, Math.min(100, ((30 - daysUntil) / 30) * 100));
+
+                    let statusColor = "bg-primary";
+                    let textColor = "text-primary";
+                    if (daysUntil <= 3) {
+                      statusColor = "bg-destructive";
+                      textColor = "text-destructive";
+                    } else if (daysUntil <= 7) {
+                      statusColor = "bg-warning";
+                      textColor = "text-warning";
+                    }
+
                     return (
-                      <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl">
-                            📅
+                      <div key={item.id} className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10             rounded-lg bg-secondary flex items-center justify-center text-lg">
+                              {item.icon || '📅'}
+                            </div>
+                            <div>
+                              <p className="font-medium">{item.name.replace('[Income] ', '')}</p>
+                              <p className="text-xs text-muted-foreground">Due {formatDate(item.next_date)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">{item.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {daysUntil === 0 ? 'Due today' : daysUntil === 1 ? 'Due tomorrow' : `Due in ${daysUntil} days`}
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(Number(item.amount))}</p>
+                            <p className={cn("text-xs font-medium", textColor)}>
+                              {daysUntil <= 0 ? 'Due today' : `In ${daysUntil} days`}
                             </p>
                           </div>
                         </div>
-                        <p className="font-semibold">{formatCurrency(Number(item.amount))}</p>
+                        <Progress value={progress} className="h-2" indicatorClassName={statusColor} />
                       </div>
                     );
                   })}
@@ -223,86 +280,151 @@ export default function Recurring() {
             </Card>
           )}
 
-          {/* Tabs */}
-          <Tabs defaultValue="active">
-            <TabsList className="mb-4">
-              <TabsTrigger value="active">Active ({bills.length})</TabsTrigger>
-              <TabsTrigger value="paused">Paused ({paused.length})</TabsTrigger>
+          {/* Income List */}
+          {/* Tabs for Bills vs Income */}
+          <Tabs defaultValue="bills" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="bills">Bills & Subscriptions</TabsTrigger>
+              <TabsTrigger value="income">Recurring Income</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="active">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {bills.map((item) => (
-                  <Card key={item.id} className="group">
-                    <CardContent className="pt-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-2xl">
-                            📦
+            <TabsContent value="income" className="mt-0">
+              {incomeItems.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {incomeItems.map((item) => (
+                    <Card key={item.id} className="group border-green-200 bg-green-50/30">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-10 w-10 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl">
+                            {item.icon || '💰'}
                           </div>
-                          <div>
-                            <p className="font-semibold">{item.name}</p>
-                            <p className="text-sm text-muted-foreground capitalize">{item.frequency}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium">{item.name.replace('[Income] ', '')}</h4>
+                            </div>
+                            <p className="text-xs text-muted-foreground capitalize">{item.frequency}</p>
                           </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(item)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleStatus(item)}>
+                                <PauseCircle className="h-4 w-4 mr-2" />
+                                Pause
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDelete(item.id)} className="text-destructive focus:text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        <p className="font-bold">{formatCurrency(Number(item.amount))}</p>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Next: {formatDate(item.next_date)}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-bold text-green-700">+{formatCurrency(Number(item.amount))}</span>
+                          <span className="text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3 inline mr-1" />
+                            {formatDate(item.next_date)}
+                          </span>
                         </div>
-                        {item.category_name && (
-                          <Badge variant="secondary">{item.category_name}</Badge>
-                        )}
-                      </div>
-                      {/* Actions */}
-                      <div className="flex gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleToggleStatus(item)}>
-                          <PauseCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 border rounded-lg border-dashed">
+                  <p className="text-muted-foreground">No recurring income tracking active</p>
+                  <Button variant="link" onClick={() => setModalOpen(true)}>Add Income</Button>
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="paused">
+            <TabsContent value="bills" className="mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paused.map((item) => (
-                  <Card key={item.id} className="opacity-60 group">
-                    <CardContent className="pt-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center text-2xl">
-                            📦
+                {bills
+                  .concat(paused)
+                  .sort((a, b) => (a.status === 'paused' ? 1 : -1))
+                  .map((item) => (
+                    <Card key={item.id} className={`group ${item.status === 'paused' ? 'opacity-60' : ''}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">
+                            {item.icon || '📅'}
                           </div>
-                          <div>
-                            <p className="font-semibold">{item.name}</p>
-                            <Badge variant="secondary">Paused</Badge>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium">{item.name.replace('[Income] ', '')}</h4>
+                              {item.status === 'paused' && (
+                                <Badge variant="secondary" className="text-xs h-5">Paused</Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground capitalize">{item.frequency}</p>
                           </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Mark as paid
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEdit(item)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleStatus(item)}>
+                                {item.status === 'active' ? (
+                                  <>
+                                    <PauseCircle className="h-4 w-4 mr-2" />
+                                    Pause
+                                  </>
+                                ) : (
+                                  <>
+                                    <PlayCircle className="h-4 w-4 mr-2" />
+                                    Resume
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDelete(item.id)} className="text-destructive focus:text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        <p className="font-bold">{formatCurrency(Number(item.amount))}</p>
-                      </div>
-                      <div className="flex gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="outline" size="sm" onClick={() => handleToggleStatus(item)}>
-                          <PlayCircle className="h-4 w-4 mr-1" />
-                          Resume
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-bold">{formatCurrency(Number(item.amount))}</span>
+                          <span className="text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3 inline mr-1" />
+                            {formatDate(item.next_date)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                {bills.length === 0 && paused.length === 0 && (
+                  <div className="col-span-full text-center py-12 border rounded-lg border-dashed">
+                    <p className="text-muted-foreground">No active subscriptions or bills</p>
+                    <Button variant="link" onClick={() => setModalOpen(true)}>Add Bill</Button>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

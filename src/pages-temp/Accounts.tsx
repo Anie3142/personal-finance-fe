@@ -8,6 +8,40 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { formatCurrency } from '@/lib/format';
 import { EmptyState, LoadingSkeleton } from '@/components/common';
 
+// Nigerian bank brand colors
+const bankColors: Record<string, string> = {
+  'gtbank': '#F7931A',
+  'access': '#F15A24',
+  'zenith': '#ED1C24',
+  'firstbank': '#003366',
+  'uba': '#E31937',
+  'fidelity': '#00A651',
+  'stanbic': '#0033A0',
+  'sterling': '#E31937',
+  'fcmb': '#6A2C91',
+  'ecobank': '#0067B1',
+  'wema': '#722F37',
+  'polaris': '#660066',
+  'keystone': '#0066B3',
+  'union': '#0066B3',
+  'default': '#64748b', // Slate-500 for generic banks
+};
+
+function getBankColor(name: string): string {
+  const lowercaseName = name.toLowerCase().replace(/\s+/g, ''); // Remove spaces for better matching
+
+  // Direct mapping check first
+  if (bankColors[lowercaseName]) return bankColors[lowercaseName];
+
+  for (const [bankKey, color] of Object.entries(bankColors)) {
+    // Check if the normalized name includes the key
+    if (lowercaseName.includes(bankKey)) {
+      return color;
+    }
+  }
+  return bankColors.default;
+}
+
 // Sample Nigerian accounts data
 const accountsData = {
   bank: [
@@ -187,11 +221,16 @@ export default function Accounts() {
 }
 
 function AccountCard({ account, onSync, syncing }: { account: any; onSync: (id: string) => void; syncing: string | null }) {
+  const bankColor = getBankColor(account.name);
+
   return (
     <Link href={`/accounts/${account.id}`}>
       <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-background flex items-center justify-center font-bold text-primary">
+          <div
+            className="h-12 w-12 rounded-xl flex items-center justify-center font-bold text-white"
+            style={{ backgroundColor: bankColor }}
+          >
             {account.name.substring(0, 2)}
           </div>
           <div>

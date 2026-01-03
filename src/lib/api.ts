@@ -66,7 +66,7 @@ class ApiClient {
   ): Promise<T> {
     // Use provided token, or fall back to the stored token
     const authToken = token ?? accessToken;
-    
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...(authToken && { Authorization: `Bearer ${authToken}` }),
@@ -80,12 +80,12 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      
+
       // If unauthorized, clear the token cache
       if (response.status === 401) {
         clearTokenCache();
       }
-      
+
       throw new Error(error.message || error.detail || `HTTP ${response.status}`);
     }
 
@@ -144,7 +144,7 @@ class ApiClient {
   syncConnection = (id: string, token?: string | null) => this.post<{ job_id: string; status: string }>(`/connections/${id}/sync`, undefined, token);
 
   // Accounts
-  getAccounts = (type?: 'savings' | 'current' | 'credit', token?: string | null) => 
+  getAccounts = (type?: 'savings' | 'current' | 'credit', token?: string | null) =>
     this.get<{ accounts: Account[] }>(`/accounts${type ? `?type=${type}` : ''}`, token);
   getAccount = (id: string, token?: string | null) => this.get<Account>(`/accounts/${id}`, token);
   createAccount = (data: Partial<Account>, token?: string | null) => this.post<Account>('/accounts', data, token);
@@ -164,7 +164,7 @@ class ApiClient {
   };
   getTransaction = (id: string, token?: string | null) => this.get<Transaction>(`/transactions/${id}`, token);
   updateTransaction = (id: string, data: TransactionUpdate, token?: string | null) => this.patch<Transaction>(`/transactions/${id}`, data, token);
-  bulkCategorize = (transactionIds: string[], categoryId: string, token?: string | null) => 
+  bulkCategorize = (transactionIds: string[], categoryId: string, token?: string | null) =>
     this.post<{ updated_count: number }>('/transactions/bulk-categorize', { transaction_ids: transactionIds, category_id: categoryId }, token);
   createManualTransaction = (data: ManualTransaction, token?: string | null) => this.post<Transaction>('/transactions/manual', data, token);
 
@@ -206,26 +206,26 @@ class ApiClient {
   deleteGoal = (id: string, token?: string | null) => this.delete<{ success: boolean }>(`/goals/${id}`, token);
 
   // Recurring
-  getRecurring = (type?: 'expense' | 'income', token?: string | null) => 
+  getRecurring = (type?: 'expense' | 'income', token?: string | null) =>
     this.get<{ recurring: RecurringTransaction[] }>(`/recurring${type ? `?type=${type}` : ''}`, token);
   getRecurringUpcoming = (token?: string | null) => this.get<RecurringUpcoming>('/recurring/upcoming', token);
   createRecurring = (data: RecurringCreate, token?: string | null) => this.post<RecurringTransaction>('/recurring', data, token);
-  updateRecurring = (id: string, data: Partial<RecurringCreate & { is_active?: boolean }>, token?: string | null) => 
+  updateRecurring = (id: string, data: Partial<RecurringCreate & { is_active?: boolean }>, token?: string | null) =>
     this.patch<RecurringTransaction>(`/recurring/${id}`, data, token);
   deleteRecurring = (id: string, token?: string | null) => this.delete<{ success: boolean }>(`/recurring/${id}`, token);
 
   // Reports
-  getMonthlyReport = (year: number, month: number, token?: string | null) => 
+  getMonthlyReport = (year: number, month: number, token?: string | null) =>
     this.get<MonthlyReport>(`/reports/monthly?year=${year}&month=${month}`, token);
-  getNetWorth = (period: '6months' | '1year' | 'all', token?: string | null) => 
-    this.get<NetWorthData>(`/reports/net-worth?period=${period}`, token);
+  getNetWorth = (token?: string | null) =>
+    this.get<NetWorthData>(`/reports/net-worth`, token);
   getSpendingTrends = (period: string, categoryIds?: string[], token?: string | null) => {
     const params = new URLSearchParams({ period });
     if (categoryIds?.length) params.append('category_ids', categoryIds.join(','));
     return this.get<{ trends: SpendingTrend[] }>(`/reports/spending-trends?${params}`, token);
   };
-  getCashFlow = (token?: string | null) => 
-    this.get<{ cash_flow: { month: string; income: number; expenses: number }[] }>('/reports/cash-flow', token);
+  getCashFlow = (period: 'monthly' | 'yearly' = 'monthly', token?: string | null) =>
+    this.get<{ cash_flow: { month: string; income: number; expenses: number }[] }>(`/reports/cash-flow?period=${period}`, token);
 
   // Insights
   getInsights = (token?: string | null) => this.get<{ insights: Insight[] }>('/insights', token);

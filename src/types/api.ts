@@ -216,6 +216,7 @@ export interface RecurringTransaction {
   account_id: string;
   status: 'active' | 'paused';
   reminder_days?: number;
+  type?: 'income' | 'expense' | 'bill';
 }
 
 export interface RecurringUpcoming {

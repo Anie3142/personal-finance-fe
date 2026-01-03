@@ -15,20 +15,20 @@ export function CashFlowChart({ data, height = 250 }: CashFlowChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-        <XAxis 
-          dataKey="month" 
+        {/* Grid removed as requested */}
+        <XAxis
+          dataKey="month"
           axisLine={false}
           tickLine={false}
           tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
-        <YAxis 
+        <YAxis
           axisLine={false}
           tickLine={false}
           tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
           tickFormatter={(value) => `₦${(value / 1000)}K`}
         />
-        <Tooltip 
+        <Tooltip
           contentStyle={{
             backgroundColor: 'hsl(var(--popover))',
             border: '1px solid hsl(var(--border))',

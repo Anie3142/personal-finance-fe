@@ -67,7 +67,16 @@ export function RecurringModal({ recurring, open, onOpenChange, onSave }: Recurr
   // Reset form when modal opens/closes or recurring changes
   useEffect(() => {
     if (open) {
-      setName(recurring?.name || '');
+      let cleanName = recurring?.name || '';
+      let detectedType = recurring?.type || 'bill';
+
+      // Workaround: Detect type from name prefix because backend doesn't persist type
+      if (cleanName.startsWith('[Income] ')) {
+        cleanName = cleanName.replace('[Income] ', '');
+        detectedType = 'income';
+      }
+
+      setName(cleanName);
       setIcon(recurring?.icon || '📦');
       setAmount(recurring?.amount?.toString() || '');
       setFrequency(recurring?.frequency || 'Monthly');
@@ -75,7 +84,7 @@ export function RecurringModal({ recurring, open, onOpenChange, onSave }: Recurr
       setCategory(recurring?.category || '');
       setAccount(recurring?.account || '');
       setReminderDays(recurring?.reminderDays?.toString() || '3');
-      setType(recurring?.type || 'bill');
+      setType(detectedType);
     }
   }, [open, recurring]);
 

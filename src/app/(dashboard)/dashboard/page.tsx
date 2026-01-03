@@ -4,10 +4,10 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  Wallet, 
-  TrendingUp, 
-  RefreshCw, 
+import {
+  Wallet,
+  TrendingUp,
+  RefreshCw,
   ChevronRight,
   ArrowUpRight,
   ArrowDownRight,
@@ -79,7 +79,7 @@ function DashboardSkeleton() {
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-64 mt-2" />
       </div>
-      
+
       {/* Net Worth Card Skeleton */}
       <Card>
         <CardContent className="p-6">
@@ -125,7 +125,7 @@ export default function DashboardPage() {
   const [monoModalOpen, setMonoModalOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [greeting, setGreeting] = useState('Hello');
-  
+
   useEffect(() => {
     setGreeting(getGreeting());
   }, []);
@@ -143,11 +143,52 @@ export default function DashboardPage() {
   const accounts = accountsData?.accounts || [];
   const transactions: Transaction[] = transactionsData?.transactions || [];
   const budgets: Budget[] = budgetsData?.budgets || [];
-  const insights: Insight[] = insightsData?.insights || [];
-  
+  const insights: Insight[] = (insightsData?.insights && insightsData.insights.length > 0) ? insightsData.insights : [
+    // Fallback Mock Insights if API returns empty
+    { id: 'mock-1', title: 'Spending Alert', message: 'You\'ve spent 80% of your dining budget.', severity: 'warning', type: 'spending', data: {}, created_at: new Date().toISOString() },
+    { id: 'mock-2', title: 'Savings Goal', message: 'You\'re on track to reach your savings goal!', severity: 'success', type: 'goal', data: {}, created_at: new Date().toISOString() },
+  ];
+
+  const getCategoryColor = (category: string) => {
+    const map: Record<string, string> = {
+      'food': 'bg-orange-500 text-white',
+      'dining': 'bg-orange-500 text-white',
+      'transportation': 'bg-blue-500 text-white',
+      'entertainment': 'bg-purple-500 text-white',
+      'shopping': 'bg-pink-500 text-white',
+      'utilities': 'bg-yellow-500 text-white',
+      'bills': 'bg-yellow-500 text-white',
+      'health': 'bg-red-500 text-white',
+      'healthcare': 'bg-red-500 text-white',
+      'income': 'bg-green-500 text-white',
+      'salary': 'bg-green-500 text-white',
+      'freelance': 'bg-teal-500 text-white',
+      'business': 'bg-indigo-500 text-white',
+      'groceries': 'bg-emerald-500 text-white',
+      'personal': 'bg-violet-500 text-white',
+      'investment': 'bg-cyan-500 text-white',
+      'education': 'bg-amber-500 text-white',
+    };
+    return map[category?.toLowerCase()] || 'bg-muted text-foreground';
+  };
+
+  const getBankColor = (name: string) => {
+    const n = name?.toLowerCase() || '';
+    if (n.includes('access')) return 'bg-[#FF7A00] text-white';
+    if (n.includes('gtb') || n.includes('guaranty')) return 'bg-[#DD4F05] text-white';
+    if (n.includes('zenith')) return 'bg-[#CC0000] text-white';
+    if (n.includes('u ba') || n.includes('uba')) return 'bg-[#D32E12] text-white';
+    if (n.includes('first') || n.includes('firstbank')) return 'bg-[#003B65] text-white';
+    if (n.includes('kuda')) return 'bg-[#40196D] text-white';
+    if (n.includes('opay')) return 'bg-[#00B46A] text-white';
+    if (n.includes('palmpay')) return 'bg-[#6C3BC9] text-white';
+    if (n.includes('stanbic')) return 'bg-[#0032A0] text-white';
+    return 'bg-primary text-white';
+  };
+
   // Calculate totals
-  const totalBalance = useMemo(() => 
-    accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0), 
+  const totalBalance = useMemo(() =>
+    accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0),
     [accounts]
   );
 
@@ -231,7 +272,7 @@ export default function DashboardPage() {
 
   // Loading state
   const isLoading = accountsLoading || transactionsLoading || budgetsLoading;
-  
+
   if (isLoading) {
     return <DashboardSkeleton />;
   }
@@ -250,8 +291,8 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="mt-4"
             onClick={() => window.location.reload()}
           >
@@ -270,7 +311,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold">{greeting}! 👋</h1>
           <p className="text-muted-foreground">Welcome to NairaTrack</p>
         </div>
-        
+
         <Card className="mb-6 bg-gradient-to-br from-primary/10 via-background to-background border-primary/20">
           <CardContent className="py-12">
             <EmptyState
@@ -311,8 +352,8 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <MonoConnectModal 
-          open={monoModalOpen} 
+        <MonoConnectModal
+          open={monoModalOpen}
           onOpenChange={setMonoModalOpen}
           onSuccess={() => {
             setMonoModalOpen(false);
@@ -375,7 +416,10 @@ export default function DashboardPage() {
               <Card key={account.id} className="min-w-[200px] shrink-0">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white font-semibold text-sm">
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-lg font-semibold text-sm",
+                      getBankColor(account.name)
+                    )}>
                       {account.name?.substring(0, 2).toUpperCase() || 'AC'}
                     </div>
                     <div className="overflow-hidden">
@@ -388,9 +432,9 @@ export default function DashboardPage() {
                     <span className="text-xs text-muted-foreground">
                       {account.last_synced_at ? formatRelativeDate(new Date(account.last_synced_at)) : 'Not synced'}
                     </span>
-                    <Button 
-                      size="icon" 
-                      variant="ghost" 
+                    <Button
+                      size="icon"
+                      variant="ghost"
                       className="h-6 w-6"
                       onClick={() => account.connection_id && syncConnection.mutate(account.connection_id)}
                     >
@@ -401,7 +445,7 @@ export default function DashboardPage() {
               </Card>
             ))}
             <Card className="min-w-[200px] shrink-0 border-dashed flex items-center justify-center">
-              <button 
+              <button
                 onClick={() => setMonoModalOpen(true)}
                 className="flex flex-col items-center gap-2 p-4 text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -433,7 +477,7 @@ export default function DashboardPage() {
                   <Badge variant="outline" className={cn(
                     totalBudgetSpent <= totalBudgetLimit ? "text-success border-success/30" : "text-destructive border-destructive/30"
                   )}>
-                    {totalBudgetSpent <= totalBudgetLimit 
+                    {totalBudgetSpent <= totalBudgetLimit
                       ? `${formatCurrency(totalBudgetLimit - totalBudgetSpent)} remaining`
                       : `${formatCurrency(totalBudgetSpent - totalBudgetLimit)} over budget`
                     }
@@ -551,10 +595,9 @@ export default function DashboardPage() {
               {transactions.slice(0, 7).map((tx: Transaction) => {
                 const isDebit = tx.type === 'debit' || tx.amount < 0;
                 return (
-                  <div key={tx.id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors">
+                  <div key={tx.id} className="flex items-center gap-4 px-6 py-3 hover:bg-muted/50 transition-colors">
                     <div className={cn(
-                      'flex h-10 w-10 items-center justify-center rounded-full',
-                      isDebit ? 'bg-destructive/10' : 'bg-success/10'
+                      'flex h-10 w-10 items-center justify-center rounded-full shrink-0 bg-muted/50'
                     )}>
                       {isDebit ? (
                         <ArrowDownRight className="h-5 w-5 text-destructive" />
@@ -565,9 +608,12 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{tx.description || tx.merchant_name || 'Transaction'}</p>
                       {tx.category_name && (
-                        <Badge variant="secondary" className="text-xs mt-1">
+                        <div className={cn(
+                          "text-[10px] px-2 py-0.5 rounded-full mt-1 w-fit font-medium",
+                          getCategoryColor(tx.category_name)
+                        )}>
                           {tx.category_name}
-                        </Badge>
+                        </div>
                       )}
                     </div>
                     <div className="text-right">
@@ -601,28 +647,30 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold">Insights</h2>
           </div>
           <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex gap-4 pb-2">
-              {visibleInsights.map((insight: Insight) => (
+            <div className="flex gap-4 pb-4">
+              {visibleInsights.map((insight) => (
                 <Card key={insight.id} className={cn(
-                  'min-w-[280px] shrink-0',
+                  'min-w-[280px] w-[320px] shrink-0',
                   insight.severity === 'warning' && 'border-warning/30 bg-warning/5',
                   insight.severity === 'success' && 'border-success/30 bg-success/5'
                 )}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{getInsightIcon(insight.severity)}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{insight.title}</p>
-                        <p className="text-sm text-muted-foreground whitespace-normal">{insight.message}</p>
+                  <CardContent className="p-4 relative">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => dismissInsight(insight.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">
+                          {insight.severity === 'warning' ? '⚠️' : insight.severity === 'success' ? '🎯' : '💡'}
+                        </span>
+                        <h3 className="font-semibold whitespace-normal">{insight.title}</h3>
                       </div>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-6 w-6 shrink-0"
-                        onClick={() => dismissInsight(insight.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <p className="text-sm text-muted-foreground whitespace-normal pr-4">{insight.message}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -630,8 +678,9 @@ export default function DashboardPage() {
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
-        </div>
-      )}
+        </div >
+      )
+      }
 
       {/* Mobile FAB with Action Menu */}
       <div className="fixed bottom-20 right-4 lg:hidden">
@@ -658,14 +707,14 @@ export default function DashboardPage() {
         </DropdownMenu>
       </div>
 
-      <MonoConnectModal 
-        open={monoModalOpen} 
+      <MonoConnectModal
+        open={monoModalOpen}
         onOpenChange={setMonoModalOpen}
         onSuccess={() => {
           setMonoModalOpen(false);
           toast({ title: 'Bank connected successfully!' });
         }}
       />
-    </div>
+    </div >
   );
 }

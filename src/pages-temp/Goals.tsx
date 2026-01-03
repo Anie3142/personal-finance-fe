@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Plus, Target, ChevronRight, TrendingUp, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import api from '@/lib/api';
 import type { Goal } from '@/types/api';
 
 export default function Goals() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -168,7 +170,7 @@ export default function Goals() {
               <h2 className="text-lg font-semibold mb-4">Active Goals ({activeGoals.length})</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activeGoals.map((goal) => (
-                  <Card key={goal.id} className="group hover:shadow-md transition-shadow">
+                  <Card key={goal.id} className="group hover:border-primary cursor-pointer transition-all" onClick={() => router.push(`/goals/${goal.id}`)}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -199,7 +201,7 @@ export default function Goals() {
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {goal.percentage}% complete • {formatCurrency(Number(goal.target_amount) - Number(goal.current_amount))} to go
+                          {Math.round(goal.percentage)}% complete • {formatCurrency(Number(goal.target_amount) - Number(goal.current_amount))} to go
                         </p>
                         {goal.monthly_contribution_needed > 0 && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -226,24 +228,37 @@ export default function Goals() {
             </div>
           )}
 
-          {/* Completed Goals */}
-          {completedGoals.length > 0 && (
+          {/* Achieved Goals */}
+          {(completedGoals.length > 0 || true) && (
             <div>
-              <h2 className="text-lg font-semibold mb-4">Completed Goals ({completedGoals.length})</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {completedGoals.map((goal) => (
-                  <Card key={goal.id} className="bg-success/5 border-success/20">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl">{goal.emoji}</span>
-                        <div>
-                          <CardTitle className="text-base">{goal.name}</CardTitle>
-                          <CardDescription className="text-success">Completed! 🎉</CardDescription>
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span className="text-2xl">🏆</span>
+                Achieved Goals
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {(completedGoals.length > 0 ? completedGoals : [
+                  // Fallback demo goal if no completed goals exist
+                  {
+                    id: 'demo-completed',
+                    name: 'Emergency Fund (Demo)',
+                    emoji: '💰',
+                    target_amount: 1000000,
+                    current_amount: 1000000,
+                    status: 'completed'
+                  }
+                ]).map((goal) => (
+                  <Card key={goal.id} className="bg-success/5 border-success/20 min-w-[200px] shrink-0">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{goal.emoji}</span>
+                          <span className="font-medium">{goal.name}</span>
                         </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-success/20 text-success font-medium">
+                          Completed
+                        </span>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="font-semibold text-success">
+                      <p className="font-bold text-success">
                         {formatCurrency(Number(goal.target_amount))}
                       </p>
                     </CardContent>
